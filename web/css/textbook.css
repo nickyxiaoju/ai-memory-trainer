@@ -1,0 +1,171 @@
+/* =====================================================================
+   css/textbook.css · 阶段 3 独占
+   准备页做成「课本内页」：文件夹标签页 + 便签式设置 + 手写体 + 页码。
+   这里只负责观感与可达性样式，交互逻辑在 js/app.js 的 InputTabs / NoteSheet / Fonts。
+   阶段 4 在本文件追加了第 4 节「行内挖空的空」（.t-line/.t-text/.t-blank/.t-hint），
+   其交互逻辑仍在 js/practice.js，这里只管观感；第 1–3 节未改动。
+   ===================================================================== */
+
+:root{
+  --paper:#fbfaf6;                 /* 内页纸色：比纯白暖一档，长时间看不刺眼 */
+  --rule:#e7e0d1;                  /* 内页细线，和纸色同色系，不抢正文 */
+  --tab-h:26px;                    /* 标签高度：与卡片上沿的压边量全靠它算 */
+  --note-bg:#fdf6e0;               /* 便签纸面 */
+  --note-bg2:#f8edcd;              /* 便签纸面渐变的暗端 */
+  --note-line:#e8d9a8;             /* 便签描边与折痕 */
+  --note-ink:#7c6b3c;              /* 便签上的次要文字（对纸面 ≥4.5:1） */
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  --hand:'LXGW WenKai','Kaiti SC','STKaiti','KaiTi','霞鹜文楷','楷体',
+        -apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+}
+
+/* ---------- 1. 内页底与手写体 ---------------------------------------- */
+body{background:var(--paper);font-family:var(--hand);line-height:1.85}
+/* 用户选了清晰黑体，或霞鹜文楷没取到，都走这一条：只换字形与行高，不动任何布局 */
+html.no-hand body{font-family:var(--sans);line-height:1.75}
+/* 楷体字形偏长，行距放宽一档；字重只保留 400/500/700，避免浏览器合成粗体把笔画糊掉 */
+h1,h2,h3,h4{font-weight:700}
+
+/* 卡片：白底 + 与纸色同系的细线，分节线打通到卡片内边缘 */
+.card{border-color:var(--rule)}
+.card .hr{margin-left:-24px;margin-right:-24px;background:var(--rule)}
+/* 竖线只给内页标题：首页已搬出 .wrap，靠这个边界把阶段 2 的分屏版式排除在外 */
+.wrap h2,.wrap h3{position:relative;padding-left:13px}
+.wrap h2::before,.wrap h3::before{
+  content:"";position:absolute;left:0;top:.22em;bottom:.22em;width:3px;
+  border-radius:2px;background:var(--green-500)
+}
+
+/* 页码：右下装饰文字，读屏靠各 .screen 的 aria-label，所以整块 aria-hidden */
+.page-no{margin:22px 4px 0;text-align:right;font-size:12.5px;letter-spacing:1.5px;color:var(--ink-3)}
+
+/* 数字与关键数据保持等宽，切到手写体也不会让计时器跳动 */
+.stat b,#stTyped,#stErr,#stTime{font-family:var(--mono)}
+
+/* 阶段 4 的行内默写正文挂这里：手写体 + 比黑体再宽一档的行距给空留出书写感 */
+.t-page{font-family:var(--hand);line-height:2.15}
+
+/* ---------- 2. 文件夹标签页 ------------------------------------------ */
+.card-folder{position:relative;margin-top:12px;padding-top:22px}
+.folder-tabs{
+  position:absolute;left:20px;top:calc(1px - var(--tab-h));   /* 底边正好压过卡片那 1px 上边框 */
+  height:var(--tab-h);display:flex;gap:4px
+}
+.ftab{
+  appearance:none;height:var(--tab-h);box-sizing:border-box;
+  padding:0 16px;font:inherit;font-size:13.5px;font-weight:700;line-height:calc(var(--tab-h) - 2px);
+  color:var(--ink-3);cursor:pointer;
+  background:linear-gradient(180deg,#f4f2ea,var(--paper));
+  border:1px solid var(--rule);border-bottom:1px solid var(--rule);
+  border-radius:9px 9px 0 0
+}
+.ftab:hover{color:var(--green-700)}
+/* 选中页与卡片同底色，并把那半格边框吃掉，才出现「这一页从文件夹里翻出来」的错觉 */
+.ftab[aria-selected="true"]{
+  background:var(--card);color:var(--green-700);
+  border-bottom-color:var(--card);margin-bottom:-1px
+}
+.fpanel{padding-top:6px}
+/* 面板本身不可聚焦（里面有可聚焦控件），但万一被程序聚焦也要有焦点环 */
+.fpanel:focus-visible{outline:3px solid var(--green-500);outline-offset:4px;border-radius:10px}
+
+/* ---------- 3. 便签式练习设置 ---------------------------------------- */
+.card-note{position:relative}
+.sticky-note{
+  position:relative;border:1px solid var(--note-line);border-radius:10px;
+  background:linear-gradient(180deg,var(--note-bg),var(--note-bg2));
+  /* 两层极淡渐变当纸纹，不加噪点图，省一次请求也免得糊字 */
+  box-shadow:var(--shadow-s), inset 0 1px 0 rgba(255,255,255,.7);
+  transform:rotate(-.6deg)          /* 只倾斜 0.6 度：手钉的感觉有，阅读不受影响 */
+}
+/* 顶部胶带：半透明白落在白色卡片上会整个消失，所以给它一点暖色，压在卡片与便签的交界上才读得出是胶带 */
+.sticky-note::before{
+  content:"";position:absolute;left:50%;top:-11px;width:88px;height:22px;
+  transform:translateX(-50%) rotate(-1.4deg);
+  background:rgba(255,246,214,.78);border:1px solid rgba(180,158,104,.42);
+  border-radius:2px;box-shadow:0 1px 2px rgba(140,116,60,.14)
+}
+/* 右下角卷起：由透明到折痕色的一小片三角 */
+.sticky-note::after{
+  content:"";position:absolute;right:-1px;bottom:-1px;width:24px;height:24px;
+  background:linear-gradient(315deg,transparent 47%,#e2d0a0 48%,#f5ead0 74%,var(--note-bg2) 100%);
+  border-radius:0 0 10px 0;box-shadow:-2px -2px 4px rgba(140,116,60,.10)
+}
+.sticky-note:hover::after{background:linear-gradient(315deg,transparent 47%,#d7c38c 48%,#f1e3c0 74%,var(--note-bg2) 100%)}
+
+.note-head{
+  appearance:none;width:100%;display:flex;align-items:center;gap:12px;
+  padding:14px 20px;border:0;border-radius:10px 10px 0 0;
+  background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer
+}
+.note-head:focus-visible{outline:3px solid var(--green-500);outline-offset:-3px;border-radius:10px}
+.note-title{font-size:17px;font-weight:700}
+.note-hint{flex:1;font-size:12.5px;color:var(--note-ink)}
+.note-caret{
+  width:9px;height:9px;flex:none;border-right:2px solid var(--note-ink);border-bottom:2px solid var(--note-ink);
+  transform:rotate(45deg);transition:transform .2s ease
+}
+.note-head[aria-expanded="true"] .note-caret{transform:rotate(-135deg)}
+
+/* 展开收起：grid-template-rows 0fr→1fr，比硬写 max-height 稳，内容变高也不会截断 */
+.note-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s ease}
+.note-inner{overflow:hidden;min-height:0;visibility:hidden;transition:visibility 0s linear .28s}
+.note-head[aria-expanded="true"] ~ .note-body{grid-template-rows:1fr}
+.note-head[aria-expanded="true"] ~ .note-body .note-inner{visibility:visible;transition:none}
+/* 内边距给子元素，不给 .note-inner：折叠时那一圈 padding 会把 0fr 顶开一条缝 */
+.note-inner>*{padding:0 20px}
+.note-inner>div+div{margin-top:14px}
+.note-inner>*:last-child{padding-bottom:18px}
+.note-font{padding-top:16px;border-top:1px dashed var(--note-line)}
+.note-font .inp{max-width:280px}
+.note-font .muted{color:var(--note-ink)}
+
+/* ---------- 4. 行内挖空的空（阶段 4） -------------------------------- */
+/* 一行课本内页 = 静态文字 + 若干行内输入框。空位做成下划线而不是方框：
+   更接近纸上默写的观感，也不会让一串方框看起来像在抄表格。 */
+.t-line{
+  position:relative;margin:0;padding:2px 0 8px 14px;
+  border-bottom:1px solid var(--rule)
+}
+.t-line:last-child{border-bottom:0}
+.t-line.is-current::before{                /* 当前段左侧一道细绿杠，眼睛知道从哪儿开始写 */
+  content:"";position:absolute;left:0;top:.35em;bottom:.35em;width:3px;border-radius:2px;background:var(--green-500)
+}
+.t-text{white-space:pre-wrap}              /* 归一之后的段落里只剩单空格，pre-wrap 足够 */
+.t-slot{display:inline}
+.t-hint{
+  display:inline;padding:0 .1em;margin-left:.08em;
+  color:var(--note-ink);background:#fdf6e6;border-bottom:1px solid #f0dfbd;border-radius:4px 4px 0 0
+}
+.t-blank{
+  box-sizing:border-box;font:inherit;color:var(--ink);
+  min-width:2.2em;width:2.4em;             /* 真实宽度由 js/practice.js 按内容逐字算好写在 style 上 */
+  margin:0 .1em;padding:.04em .3em .08em;
+  border:0;border-bottom:2px solid #c9c2ae;border-radius:5px 5px 0 0;
+  background:#f7f9f7;line-height:1.5;vertical-align:baseline;
+  transition:background-color .16s ease,border-color .16s ease,color .16s ease
+}
+.t-blank.is-ok{background:var(--green-050);border-bottom-color:var(--green-500);color:var(--green-700)}
+.t-blank.is-bad{background:var(--red-050);border-bottom-color:var(--red-500);color:var(--red-700)}
+.t-blank.t-blank--hinted{border-bottom-style:dashed}   /* 虚线 = 这个空被提示过，绿/红状态照常叠加 */
+.t-blank[readonly]{cursor:default}         /* 写对后只是不让你再改，仍然可读、可 Tab 到达 */
+.t-blank:focus-visible{outline:3px solid var(--green-500);outline-offset:2px}
+.t-loading{padding:18px 0;color:var(--ink-3);font-size:14px}
+/* 大字模式：连笔处要留得开，否则三个字词的最后一笔会被滚动条吃掉 */
+/* 大字模式由 html.t-big 驱动（app.js 切换），不逐空加类名：翻开关时不必重渲染，正在输入的内容不会被冲掉 */
+html.t-big .t-blank{padding:.1em .34em .14em;border-bottom-width:3px}
+
+/* ---------- 5. 窄屏与动效偏好 ---------------------------------------- */
+@media (max-width:640px){
+  .folder-tabs{left:12px}
+  .ftab{padding:0 12px;font-size:13px}
+  .note-hint{display:none}
+  .note-head{padding:12px 14px}
+  .note-inner>*{padding:0 14px}
+  .t-line{padding-left:10px}
+}
+@media (prefers-reduced-motion:reduce){
+  .sticky-note{transform:none}
+  .note-body,.note-inner,.note-caret{transition:none}
+  .t-blank{transition:none}
+}

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI 沉浸式记忆练习助手 · 阿里云天池 AI 算法大赛参赛作品</title>
+<meta name="description" content="面向学生记忆学习与老年人脑力训练的 AI 沉浸式记忆练习工具。OCR 取文 + 大模型智能挖空 + 逐空实时判定 + 阶段性闯关测验 + 练习报告。" />
+<link rel="stylesheet" href="css/app.css" />
+<link rel="stylesheet" href="css/landing.css" />
+<link rel="stylesheet" href="css/textbook.css" />
+<!-- 霞鹜文楷（SIL OFL 1.1，免费商用）：media=print 让它先以非阻塞方式下载，
+     到手后再切回 all。CDN 取不到只影响字形，功能与可读性由系统楷体/黑体兜底。 -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.min.css"
+      media="print" onload="this.media='all'" />
+<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.min.css" /></noscript>
+</head>
+<body>
+
+<!-- ===================== 顶栏 ===================== -->
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="logo"><span class="logo-mark">忆</span><span>AI 沉浸式记忆练习助手</span></div>
+    <span class="badge">阿里云天池 AI 算法大赛</span>
+    <span class="spacer"></span>
+    <nav class="mainnav" aria-label="主入口">
+      <button type="button" class="navtab" id="navLearn" data-goto="setup">开始学习</button>
+      <button type="button" class="navtab" id="navProfile" data-goto="profile">个人中心</button>
+    </nav>
+    <button type="button" class="authchip local" id="authChip" title="账号状态"><span class="dot"></span>本地模式</button>
+  </div>
+</div>
+
+<!-- ===================== 屏幕 1：首页（分屏吸附） ===================== -->
+<!-- 首屏必须放在 .wrap 之外：分屏要整屏铺满底色，而 .wrap 有 1000px 上限与左右内边距 -->
+<section class="screen on" id="screen-home" aria-label="产品介绍">
+
+  <!-- 首屏：纯色深绿实底 + 一句话主张 -->
+  <div class="fs fs-hero" id="fs-hero">
+    <div class="fs-in">
+      <div class="fs-badges">
+        <span class="badge on-dark">阿里云天池 AI 算法大赛参赛作品</span>
+        <span class="badge on-dark alt">教育公平</span>
+        <span class="badge on-dark alt">老年脑力健康</span>
+      </div>
+      <h1><span>把任何一段文字，</span><span>变成会挖空的默写训练</span></h1>
+      <p class="fs-claim">拍照取文、AI 挑关键词挖空、逐空实时判定、中途闯关出题，一条流水线跑完；学生用它背课本，长辈用它练脑力。</p>
+      <div class="fs-cta">
+        <button class="btn big" id="goSetup">开始学习</button>
+        <button class="btn ghost" id="goSetupDemo">演示模式体验（无需 API Key）</button>
+      </div>
+      <p class="fs-privacy">未登录时全程在这台浏览器内完成，不产生任何服务器数据；登录后只有练习统计与关键词明细会同步到<b>你自己的</b> Supabase 账号。文本与密钥只发往官方推理接口（Hugging Face / Groq），本站没有服务端密钥。</p>
+      <div class="fs-hint" aria-hidden="true" data-fs="fs-ocr"><span>向下滚动，逐屏看六项能力</span><i class="fs-arrow"></i></div>
+    </div>
+  </div>
+
+  <!-- 六屏能力介绍：浅灰与白交替 -->
+  <div class="fs" id="fs-ocr">
+    <div class="fs-in">
+      <p class="fs-kicker">输入</p>
+      <h2>拍照即可练（OCR）</h2>
+      <p class="fs-claim">课本、讲义、手写卡片拍一张照，就能变成练习内容。</p>
+      <p class="fs-desc">图片交给 Hugging Face 视觉模型识别成文字并自动填入内容框，识别结果可再手工校正；也可以直接粘贴长文本。没有 Token 时，示例文本与演示模式照样能跑完整流程，输入不再是门槛。</p>
+    </div>
+  </div>
+
+  <div class="fs alt" id="fs-blanks">
+    <div class="fs-in">
+      <p class="fs-kicker">提取</p>
+      <h2>AI 智能挖空</h2>
+      <p class="fs-claim">大模型替每一段挑出人名、地名、关键数据，把它们换成空格。</p>
+      <p class="fs-desc">背诵从「照着抄一遍」变成「凭记忆把关键词提取出来」，这正是记忆科学里最有效的那一步。没有配置 Groq Key 时自动改用本地关键词算法，练习照常进行，只是挑词没有大模型那么懂语义。</p>
+    </div>
+  </div>
+
+  <div class="fs" id="fs-compare">
+    <div class="fs-in">
+      <p class="fs-kicker">反馈</p>
+      <h2>逐空实时判定</h2>
+      <p class="fs-claim">原文照常显示，只在关键词处填词：写对转绿，写错转红，红色可以接着改。</p>
+      <p class="fs-desc">每个空独立判定，进度实时可见；本段关键词全部写对才进入下一段。Tab 按行文顺序在空之间移动，Enter 直接定位到第一个还没写对的位置，键盘就能走完整个默写流程。</p>
+    </div>
+  </div>
+
+  <div class="fs alt" id="fs-quiz">
+    <div class="fs-in">
+      <p class="fs-kicker">校验</p>
+      <h2>阶段性闯关测验</h2>
+      <p class="fs-claim">练到一半自动停下来，出一道只用已练内容出的题。</p>
+      <p class="fs-desc">答对才解锁后续段落，形成「提取 — 校验 — 继续」的闭环，避免「一路抄到底却什么都没记住」。题目优先由 AI 现场生成，接口不可用时退回本地出题；不想被拦下，也可以在练习设置里关掉这一项。</p>
+    </div>
+  </div>
+
+  <div class="fs" id="fs-access">
+    <div class="fs-in">
+      <p class="fs-kicker">可用</p>
+      <h2>适老化与无障碍</h2>
+      <p class="fs-claim">字更大、可读、可听，键盘能完成全部操作。</p>
+      <p class="fs-desc">大字模式、慢速朗读、高对比的红绿反馈、屏幕阅读器标签与实时播报都在流程之内；分屏导航的圆点是可聚焦的按钮，当前屏用拉长的胶囊形状区分，而不是只靠颜色，色觉障碍的用户也看得出位置。</p>
+    </div>
+  </div>
+
+  <div class="fs alt" id="fs-report">
+    <div class="fs-in">
+      <p class="fs-kicker">复盘</p>
+      <h2>练习报告</h2>
+      <p class="fs-claim">结束时给出用时、正确率、提示次数与闯关结果。</p>
+      <p class="fs-desc">报告按本次实际练过的内容统计，学生便于复盘，家属也能看长辈今天练了多少、卡在哪里。登录之后，历次记录会出现在个人中心，可以回看逐空明细、改标题或删除。</p>
+    </div>
+  </div>
+
+  <!-- 页底次要信息：技术路线与为什么值得做，默认收起 -->
+  <div class="fs fs-end" id="fs-end">
+    <div class="fs-in">
+      <p class="fs-kicker">补充</p>
+      <h2>技术路线与为什么值得做</h2>
+      <details class="minor">
+        <summary>展开看流水线与项目动机</summary>
+        <div class="minor-body">
+          <div>
+            <div class="flow">
+              <span class="k">图片 / 长文本</span><span class="arrow">→</span>
+              <span class="k">Hugging Face Inference（OCR）</span><span class="arrow">→</span>
+              <span class="k">分段引擎</span><span class="arrow">→</span>
+              <span class="k">Groq（关键词挖空）</span><span class="arrow">→</span>
+              <span class="k">逐空比对默写</span><span class="arrow">→</span>
+              <span class="k">Groq（50% 闯关出题）</span><span class="arrow">→</span>
+              <span class="k">学习报告</span>
+            </div>
+            <p class="minor-p">
+              <b>为什么值得做：</b>背诵类练习工具普遍停留在「复制—粘贴—对答案」，没有真正的记忆提取；
+              而市面上的老年认知训练 App 多为付费游戏化题目，缺少「用自家课本、自家内容来练」的能力。
+              本项目用两个免费推理接口拼出一条通用流水线：<b>任何一段文字（或一张照片）都能立刻变成一套有 AI 挖空、有闯关校验的默写训练</b>，
+              城乡学生与老年用户都可零成本使用。
+            </p>
+            <p class="minor-p">
+              <b>数据与隐私：</b>密码只经过 Supabase Auth，不进数据表、不进本机存储、不出现在日志里；
+              前端只使用 anon 公钥，能读到哪些行完全由数据库的行级安全策略决定，账号之间互不可见。
+            </p>
+          </div>
+        </div>
+      </details>
+      <footer class="foot">
+        AI 沉浸式记忆练习助手 · 阿里云天池 AI 算法大赛参赛作品 · 纯前端实现（HTML + CSS + 原生 JavaScript，无自建服务端）<br />
+        推理接口：Hugging Face Inference API（文字识别） / Groq API（智能挖空与出题）· 账号与数据：你自己的 Supabase 项目<br />
+        键盘操作：Enter 进入下一段，Esc 退出练习 · 接口说明与隐私口径见「准备练习内容」页<br />
+        正文字体：霞鹜文楷（SIL OFL 1.1，免费商用）· 未取得时自动退回系统楷体
+      </footer>
+    </div>
+  </div>
+</section>
+
+<!-- 分屏圆点指示器：只有首页在场时可见（.snap-home 控制） -->
+<nav class="fs-dots" aria-label="分屏导航">
+  <button type="button" class="fsdot" data-fs="fs-hero" aria-label="第 1 屏：产品主张"></button>
+  <button type="button" class="fsdot" data-fs="fs-ocr" aria-label="第 2 屏：拍照即可练 OCR"></button>
+  <button type="button" class="fsdot" data-fs="fs-blanks" aria-label="第 3 屏：AI 智能挖空"></button>
+  <button type="button" class="fsdot" data-fs="fs-compare" aria-label="第 4 屏：逐空实时判定"></button>
+  <button type="button" class="fsdot" data-fs="fs-quiz" aria-label="第 5 屏：阶段性闯关测验"></button>
+  <button type="button" class="fsdot" data-fs="fs-access" aria-label="第 6 屏：适老化与无障碍"></button>
+  <button type="button" class="fsdot" data-fs="fs-report" aria-label="第 7 屏：练习报告"></button>
+  <button type="button" class="fsdot" data-fs="fs-end" aria-label="第 8 屏：技术路线与为什么值得做"></button>
+</nav>
+
+<div class="wrap">
+
+<!-- ===================== 屏幕 2：配置与输入 ===================== -->
+<section class="screen" id="screen-setup" aria-label="准备练习内容">
+  <h2 style="margin-top:22px">准备你的练习内容</h2>
+  <p class="sub">填好密钥（可跳过）、贴入或拍入文本，然后选择练习方式。</p>
+
+  <div class="card">
+    <h3>模型接口配置</h3>
+    <div class="grid2">
+      <div>
+        <label class="f" for="hfToken">Hugging Face Token（用于 OCR 图片识字）</label>
+        <input class="inp" id="hfToken" type="password" autocomplete="off" placeholder="hf_xxxxxxxxxxxxxxxxxxxx" />
+      </div>
+      <div>
+        <label class="f" for="groqKey">Groq API Key（用于智能挖空 / 出题）</label>
+        <input class="inp" id="groqKey" type="password" autocomplete="off" placeholder="gsk_xxxxxxxxxxxxxxxxxxxx" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <label class="check"><input type="checkbox" id="rememberKeys" /> 记住密钥（仅保存在本机浏览器 localStorage）</label>
+      <label class="check"><input type="checkbox" id="demoMode" /> 演示模式：不调用外部 API，改用本地算法挖空/出题</label>
+    </div>
+    <p class="muted" style="margin:10px 0 0">
+      安全说明：本站没有自建服务器，这两个密钥只在你浏览器里直接发往官方接口，不会经过我们，也不会写进代码仓库或任何数据表。
+      公共电脑或演示机上请勿勾选「记住密钥」，练习结束点「清除密钥」（它同时清空输入框和本机存储）。账号密码由 Supabase 认证服务保管，与这里两个密钥无关。
+    </p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn sm ghost" id="btnClearKeys">清除密钥</button>
+      <span class="muted" id="keyState">状态：未配置</span>
+    </div>
+  </div>
+
+  <div class="card card-folder">
+    <div class="folder-tabs" role="tablist" aria-label="练习内容的输入方式">
+      <button type="button" class="ftab" id="tabOcr" role="tab" aria-controls="panel-ocr" aria-selected="true" tabindex="0">拍照识字</button>
+      <button type="button" class="ftab" id="tabText" role="tab" aria-controls="panel-text" aria-selected="false" tabindex="-1">粘贴文本</button>
+    </div>
+
+    <!-- 面板用 hidden 属性切换，不用 display:none 类：焦点与读屏行为都跟着原生语义走 -->
+    <div class="fpanel" id="panel-ocr" role="tabpanel" aria-labelledby="tabOcr">
+      <div class="grid2">
+        <div>
+          <label class="f" for="ocrEngine">OCR 引擎</label>
+          <select class="inp" id="ocrEngine">
+            <option value="vlm" selected>多模态大模型（推荐，中文/整页效果好）</option>
+            <option value="doc">文档解析模型（TrOCR / DocTR 等）</option>
+          </select>
+        </div>
+        <div>
+          <label class="f" for="ocrModel">模型 ID</label>
+          <input class="inp" id="ocrModel" value="Qwen/Qwen2.5-VL-7B-Instruct" spellcheck="false" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <input type="file" id="imgFile" accept="image/*" class="sr-only" />
+        <button class="btn blue" id="btnUploadPick">选择图片并识别文字</button>
+        <button class="btn ghost sm" id="btnOcrFileInput">仅选择文件（不识别）</button>
+        <span class="muted" id="ocrState">未选择图片</span>
+      </div>
+      <img id="thumb" alt="上传的图片预览" />
+    </div>
+
+    <div class="fpanel" id="panel-text" role="tabpanel" aria-labelledby="tabText" hidden>
+      <textarea class="inp" id="srcText" placeholder="把要背诵的课文、单词短文、康复训练语句粘贴到这里……&#10;&#10;示例：&#10;庆历四年春，滕子京谪守巴陵郡。越明年，政通人和，百废具兴，乃重修岳阳楼。"></textarea>
+      <div class="row" style="margin-top:10px">
+        <span class="muted">试试示例：</span>
+        <button class="chip" data-sample="yyl">岳阳楼记（名篇背诵）</button>
+        <button class="chip" data-sample="en">英语课文（单词拼写）</button>
+        <button class="chip" data-sample="old">长者认知训练（生活常识）</button>
+        <button class="chip" data-sample="clear">清空</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card card-note">
+    <div class="sticky-note" id="practiceNote">
+      <!-- 不用 <details>：这里要精确控制 aria-expanded 与展开动画，
+           折叠状态还得让内部控件同步退出 Tab 顺序，details 做不到这么细。 -->
+      <button type="button" class="note-head" id="noteToggle" aria-expanded="false" aria-controls="noteBody">
+        <span class="note-title">练习设置</span>
+        <span class="note-hint">展开可改每段长度、模型与各项开关</span>
+        <span class="note-caret" aria-hidden="true"></span>
+      </button>
+      <div class="note-body" id="noteBody">
+        <div class="note-inner">
+          <div class="grid2">
+            <div>
+              <label class="f" for="chunk">每段长度（按句自动累积）</label>
+              <select class="inp" id="chunk">
+                <option value="short">短句（约 20–40 字，适合长辈/初学）</option>
+                <option value="mid" selected>中等（约 40–80 字，推荐）</option>
+                <option value="long">长段（约 80–140 字，适合冲刺背诵）</option>
+              </select>
+            </div>
+            <div>
+              <label class="f" for="groqModel">Groq 模型</label>
+              <select class="inp" id="groqModel">
+                <option value="llama-3.3-70b-versatile" selected>llama-3.3-70b-versatile</option>
+                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant（更快）</option>
+                <option value="gemma2-9b-it">gemma2-9b-it</option>
+              </select>
+            </div>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <label class="check"><input type="checkbox" id="optCloze" checked /> 开启 AI 智能挖空（核心词替换为 ______）</label>
+            <label class="check"><input type="checkbox" id="optQuiz" checked /> 开启 50% 闯关测验</label>
+            <label class="check"><input type="checkbox" id="optBig" /> 大字模式</label>
+            <label class="check"><input type="checkbox" id="optSpeak" /> 自动朗读每段</label>
+          </div>
+          <div class="note-font">
+            <label class="f" for="fontStyle">字体风格</label>
+            <select class="inp" id="fontStyle">
+              <option value="hand" selected>手写体（霞鹜文楷）</option>
+              <option value="sans">清晰黑体</option>
+            </select>
+            <p class="muted" id="fontState" style="margin:8px 0 0">手写体的字形要联网取一次，取不到会自动退回系统楷体，只影响字形，不影响任何功能。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <hr class="hr" />
+    <div class="row">
+      <button class="btn big" id="btnStart">开始练习</button>
+      <button class="btn ghost" id="backHome">返回首页</button>
+      <span class="muted" id="splitInfo"></span>
+    </div>
+  </div>
+
+  <div class="page-no" aria-hidden="true">第 2 页 · 共 4 页</div>
+</section>
+
+<!-- ===================== 屏幕：登录 / 注册 ===================== -->
+<section class="screen" id="screen-auth" aria-label="账号登录与注册">
+  <div class="auth-head">
+    <h2>账号与练习记录</h2>
+    <p class="muted">
+      登录之后，每次完成的练习会自动保存到<b>你自己的</b>云端账号里，换浏览器或设备也能接着看；
+      不登录同样可以完整练习，只是记录只留在当前这台设备上。
+      密码由 Supabase 官方认证服务加密保管，本项目不会把密码写进任何数据表，也不会写进浏览器本地存储。
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="row" role="group" aria-label="登录方式" id="authTabs">
+      <button type="button" class="chip on" id="tabEmail" aria-pressed="true">邮箱与密码</button>
+      <button type="button" class="chip" id="tabPhone" aria-pressed="true" hidden>手机验证码</button>
+    </div>
+
+    <div id="paneEmail">
+      <hr class="hr" />
+      <div class="grid2">
+        <div>
+          <label class="f" for="authEmail">邮箱</label>
+          <input class="inp" id="authEmail" type="email" inputmode="email" autocomplete="email"
+                 spellcheck="false" placeholder="name@example.com" />
+        </div>
+        <div id="nickRow" hidden>
+          <label class="f" for="authNickname">昵称（选填，注册后可在个人中心修改）</label>
+          <input class="inp" id="authNickname" type="text" maxlength="24" autocomplete="nickname" placeholder="例如：爱背课文的小王" />
+        </div>
+      </div>
+      <div style="height:14px"></div>
+      <label class="f" for="authPwd">密码<input class="inp" id="authPwd" type="password" autocomplete="current-password" /></label>
+      <label class="f" id="pwd2Row" for="authPwd2" hidden>确认密码<input class="inp" id="authPwd2" type="password" autocomplete="new-password" /></label>
+      <p class="muted small">注册请至少 8 位；演示账号建议用你自己能收到的邮箱。</p>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="btnSignin">登录</button>
+        <button class="btn ghost" id="btnSignup">注册新账号</button>
+        <button class="btn sm ghost" id="btnForgot">忘记密码</button>
+      </div>
+    </div>
+
+    <div id="panePhone" hidden>
+      <hr class="hr" />
+      <label class="f" for="authPhone">手机号（含国家码，例如 +8613800000000）</label>
+      <input class="inp" id="authPhone" type="tel" autocomplete="tel" placeholder="+8613800000000" />
+      <div style="height:14px"></div>
+      <label class="f" for="authOtp">短信验证码<input class="inp" id="authOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" /></label>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="btnSendOtp">发送验证码</button>
+        <button class="btn ghost" id="btnVerifyOtp">验证并登录</button>
+      </div>
+    </div>
+
+    <p class="tip warn" id="phoneNote" role="note" hidden></p>
+    <p class="tip warn" id="authErr" role="alert" hidden></p>
+    <p class="muted small" id="authMode"></p>
+  </div>
+
+  <div class="card" id="recoverCard" hidden>
+    <h3>设置新密码</h3>
+    <p class="muted">你通过邮件里的链接回到了这里，身份已经验证通过。请填写新密码；也可以直接关闭本卡片，维持原密码不变。</p>
+    <label class="f" for="newPwd">新密码<input class="inp" id="newPwd" type="password" autocomplete="new-password" /></label>
+    <label class="f" for="newPwd2">确认新密码<input class="inp" id="newPwd2" type="password" autocomplete="new-password" /></label>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="btnSavePwd">保存新密码</button>
+      <button class="btn ghost" id="btnSkipRecover">暂不修改</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <button class="btn ghost" id="authBack">返回首页</button>
+    <span class="muted small">不想注册也可以：首页的「演示模式体验」用本地算法完成全流程，不产生任何云端数据。</span>
+  </div>
+</section>
+
+<!-- ===================== 屏幕：个人中心 ===================== -->
+<section class="screen" id="screen-profile" aria-label="个人中心">
+
+  <div class="card" id="pGuest">
+    <h3>还没有登录</h3>
+    <p class="muted">未登录时，下面的累计次数、累计字数、平均正确率、连续打卡与练习历史同样可以看，只是这些数据只存在这台浏览器里；
+      登录后同样的记录会同步到你自己的账号，换设备也还在。
+      当前后端状态：<span id="pGuestMode">检测中</span></p>
+    <div class="row">
+      <button class="btn" id="pGoAuth">去登录 / 注册</button>
+      <button class="btn ghost" id="pGoLearn">先去练习</button>
+    </div>
+  </div>
+
+  <div id="pBody">
+    <div class="card p-head" id="pAcctCard" hidden>
+      <div class="p-id">
+        <div class="p-avatar" id="pAvatarBox" aria-hidden="true"></div>
+        <div class="p-idtext">
+          <div class="p-mail" id="pEmail"></div>
+          <div class="p-join">注册于 <span id="pJoined">未知</span> · 账号数据仅本人可见</div>
+        </div>
+      </div>
+      <hr class="hr" />
+      <div class="grid2">
+        <div>
+          <label class="f" for="pNick">昵称</label>
+          <input class="inp" id="pNick" type="text" maxlength="24" />
+        </div>
+        <div>
+          <label class="f" for="pAvatar">头像（预设图库，不上传任何文件）</label>
+          <select class="inp" id="pAvatar"></select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn sm" id="btnSaveProfile">保存资料</button>
+        <span class="muted small" id="profileState"></span>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat"><b id="pStreak">0</b><span>连续打卡天数</span></div>
+      <div class="stat"><b id="pCount">0</b><span>累计练习次数</span></div>
+      <div class="stat"><b id="pChars">0</b><span>累计练习字数</span></div>
+      <div class="stat"><b id="pAcc">--</b><span>平均关键词正确率</span></div>
+    </div>
+    <p class="muted small" id="statNote"></p>
+
+    <div class="card">
+      <h3>练习历史</h3>
+      <div class="row">
+        <button class="btn sm ghost" id="btnSyncLocal">把本机未同步的记录传到云端</button>
+        <span class="muted small" id="syncInfo"></span>
+      </div>
+      <hr class="hr" />
+      <div id="historyList" class="hlist"></div>
+    </div>
+
+    <div class="card" id="sessionDetail" hidden>
+      <h3>单次记录详情</h3>
+      <div class="row">
+        <input class="inp" id="detailTitle" type="text" maxlength="60" style="max-width:420px" aria-label="记录名称" />
+        <button class="btn sm ghost" id="btnRename">改名</button>
+      </div>
+      <div id="detailMeta" class="muted small"></div>
+      <div class="tblwrap"><table class="tbl" id="detailBlanks"></table></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn sm ghost" id="detailClose">收起</button>
+        <button class="btn sm warn" id="btnDeleteSession">删除这条记录</button>
+        <span class="muted small" id="detailState"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>账号与本机数据</h3>
+      <ul class="ok-list" id="pExplain"></ul>
+      <div class="row" style="margin-top:12px">
+        <button class="btn ghost" id="btnLogout">退出登录</button>
+        <button class="btn sm warn" id="btnClearLocal">清除本机密钥与记录</button>
+      </div>
+      <p class="muted small">清除本机数据不会删除云端记录；如需彻底删除云端数据，请登录对应账号后逐条删除，或注销该 Supabase 账号。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 屏幕 3：练习界面 ===================== -->
+<section class="screen" id="screen-practice" aria-label="默写练习">
+  <div class="card" style="margin-top:22px">
+    <div class="meta">
+      <span class="badge blue" id="progLabel">第 1 / 1 段</span>
+      <span class="spacer"></span>
+      <button class="btn sm ghost" id="btnSpeak">朗读本段</button>
+      <button class="btn sm ghost" id="btnReveal">提示（剩 <b id="hintLeft">3</b> 次）</button>
+      <button class="btn sm warn" id="btnQuit">退出练习</button>
+    </div>
+    <div class="bar" role="progressbar" aria-label="练习进度"><i id="progBar"></i></div>
+
+    <hr class="hr" />
+
+    <div id="clozeHintWrap">
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <div class="sub" style="margin:0"><b>请默写下面这段</b>（灰框凭记忆填写，其余文字照常显示）</div>
+        <div class="muted" id="aiState">准备中…</div>
+      </div>
+      <div class="t-page" id="passage"></div>
+      <div class="kwtags" id="kwTags"></div>
+      <div class="tip info" id="blankTip" role="status" aria-live="polite">第一段正在准备，稍等一两秒。</div>
+      <div class="muted">键盘：<span class="kbd">Enter</span> 提交并跳到下一个空 · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> 回到上一个 · <span class="kbd">Tab</span> 按文序走</div>
+    </div>
+
+    <hr class="hr" />
+
+    <div class="row" style="margin-top:14px;justify-content:space-between">
+      <div class="legend">
+        <span><i style="background:var(--green-050);border:1px solid var(--green-500)"></i>已写对</span>
+        <span><i style="background:var(--red-050);border:1px solid var(--red-500)"></i>还需修改</span>
+        <span><i style="background:#f7f9f7;border:1px solid #c9c2ae"></i>待填写</span>
+        <span><i style="background:#fdf6e6;border:1px solid #f0dfbd"></i>提示给的字</span>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnNext" aria-disabled="true">下一段 →</button>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:14px">统计：本段已写对 <b id="stTyped">0</b> 个空 · 累计写错 <b id="stErr">0</b> 次 · 用时 <b id="stTime">00:00</b></p>
+  </div>
+
+  <div class="page-no" aria-hidden="true">第 3 页 · 共 4 页</div>
+</section>
+
+<!-- ===================== 屏幕 4：学习报告 ===================== -->
+<section class="screen" id="screen-report" aria-label="练习报告">
+  <div class="card" style="margin-top:22px">
+    <h2>练习完成！</h2>
+    <p class="sub" id="reportLead">这是本次的学习报告，可以截图保存或与老师、家人分享。</p>
+    <div class="stat-grid">
+      <div class="stat"><b id="rSeg">0</b><span>完成段落</span></div>
+      <div class="stat"><b id="rAcc">0%</b><span>关键词首次正确率</span></div>
+      <div class="stat"><b id="rTime">00:00</b><span>总用时</span></div>
+      <div class="stat"><b id="rHint">0</b><span>提示次数</span></div>
+      <div class="stat"><b id="rQuiz">—</b><span>闯关测验</span></div>
+    </div>
+    <p class="muted small" id="rAccNote"></p>
+    <h3 style="font-size:16px">本次 AI 提取的核心关键词</h3>
+    <div class="kwtags" id="rKws"></div>
+    <hr class="hr" />
+    <h3 style="font-size:16px">下一步建议</h3>
+    <ul class="ok-list" id="rAdvice"></ul>
+    <div class="row" style="margin-top:18px">
+      <button class="btn" id="btnAgain">再练一遍</button>
+      <button class="btn ghost" id="btnNewText">换一段内容</button>
+      <button class="btn ghost" id="btnHome2">回首页</button>
+    </div>
+  </div>
+
+  <div class="page-no" aria-hidden="true">第 4 页 · 共 4 页</div>
+</section>
+
+</div><!-- /.wrap -->
+
+<!-- ===================== 全局遮罩：Loading ===================== -->
+<div class="veil" id="veil" role="status" aria-live="polite">
+  <div class="sheet" style="max-width:420px;text-align:center">
+    <div class="spin" aria-hidden="true"></div>
+    <h3 id="veilTitle" style="margin-bottom:6px">正在处理…</h3>
+    <p class="sub" id="veilMsg" style="margin:0">AI 正在思考，请稍候。</p>
+  </div>
+</div>
+
+<!-- ===================== 全局遮罩：本机记录迁移 ===================== -->
+<div class="veil" id="migrateVeil" role="dialog" aria-modal="true" aria-labelledby="migrateTitle">
+  <div class="sheet msheet">
+    <span class="badge">个人数据</span>
+    <h3 id="migrateTitle" style="margin-top:10px">要把这台设备上的练习记录同步到云端吗？</h3>
+    <p class="muted" id="migrateDesc" style="margin:10px 0 0"></p>
+    <ul class="ok-list" style="margin-top:12px">
+      <li>同步后换浏览器或设备登录同一账号，仍能查看这些记录。</li>
+      <li>只同步练习统计与关键词明细，不会上传你的原文全文。</li>
+      <li>不同步也完全可以继续使用，记录只留在本机。</li>
+    </ul>
+    <p class="tip warn" id="migrateState" role="status" hidden></p>
+    <div class="row" style="margin-top:16px">
+      <button class="btn" id="btnMigrateYes">开始同步</button>
+      <button class="btn ghost" id="btnMigrateNo">这次先不同步</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 全局遮罩：闯关测验 ===================== -->
+<div class="veil" id="quizVeil" role="dialog" aria-modal="true" aria-labelledby="quizTitle">
+  <div class="sheet">
+    <span class="badge amber">阶段性闯关测验</span>
+    <h3 id="quizTitle" style="margin-top:10px">已练到一半，先答对这道题再解锁后续内容</h3>
+    <div class="q-body" id="qBody"></div>
+    <div id="qArea"></div>
+    <p class="muted" id="qTry" style="margin:6px 0 12px"></p>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn ghost sm" id="qSkipBtn" style="display:none">这题先跳过</button>
+      <button class="btn" id="qSubmit">提交答案</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" aria-live="polite" aria-atomic="true"></div>
+
+<!-- Supabase SDK（本地副本，classic script，暴露全局 supabase） -->
+<script src="vendor/supabase.js"></script>
+<!-- 真实配置：Project URL / anon key，不入库；缺失时自动降级为本地模式 -->
+<script src="js/config.js"></script>
+<script src="js/core.js"></script>
+<script src="js/store.js"></script>
+<script src="js/api.js"></script>
+<script src="js/text.js"></script>
+<script src="js/keywords.js"></script>
+<script src="js/quiz.js"></script>
+<script src="js/practice.js"></script>
+<script src="js/report.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/cloud.js"></script>
+<script src="js/history.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

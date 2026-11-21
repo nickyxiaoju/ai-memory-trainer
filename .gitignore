@@ -1,0 +1,32 @@
+# 真实后端配置（Supabase Project URL + anon key），只留在本机，绝不入库、绝不进发布目录 web/
+# 发布前必须把它放在 web/ 之外：prepare_site 打包整个 webDirectory，没有排除清单
+_local/
+web/js/config.js
+
+# 其它可能的本地机密
+.env
+.env.*
+*.local
+*.key
+*.pem
+
+# 参照用旧单文件（拆分前的基线，不参与发布，也不入库）
+_source_reference/
+
+# 截图脚本与截图产物（本机调试用，与产品无关）
+shots/
+
+# 只在 Supabase 控制台执行的建表脚本，含库结构，不进公开仓库
+sql/
+
+# Qoder 站点绑定文件（平台状态与冻结快照副本，不是源码）
+*.qoder.site
+
+# 备份文件
+*.bak
+*.old
+*~
+
+# 编辑器/系统
+.DS_Store
+Thumbs.db

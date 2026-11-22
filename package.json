@@ -1,0 +1,16 @@
+{
+  "name": "ai-memory-trainer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "页间 Folio 主动阅读工作台与经典默写练习",
+  "scripts": {
+    "dev": "node scripts/reader.mjs",
+    "start": "node scripts/reader.mjs",
+    "dev:classic": "node scripts/serve.mjs",
+    "test": "node --experimental-strip-types --test reader/tests/*.test.mjs",
+    "test:documents": "python3 -B -m unittest discover -s reader/tests",
+    "test:browser": "node reader/tests/browser.mjs desktop && node reader/tests/browser.mjs mobile"
+  },
+  "engines": { "node": ">=22.13.0" }
+}

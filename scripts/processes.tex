@@ -1,0 +1,109 @@
+% Rebuild: xelatex -halt-on-error -output-directory=/tmp scripts/processes.tex
+% Then copy /tmp/processes.pdf to reader/public/. Coordinates are in PDF points.
+% Use Noto even for LaTeX's initial font on installations without Latin Modern.
+\IfFileExists{lmroman10-regular.otf}{}{%
+  \DeclareFontShape{TU}{lmr}{m}{n}{<->"Noto Serif CJK SC"}{}%
+  \DeclareFontShape{TU}{lmr}{bx}{n}{<->"Noto Serif CJK SC/B"}{}}
+\documentclass[multi=tikzpicture,border=0pt]{standalone}
+\usepackage{fontspec,tikz}
+\usetikzlibrary{arrows.meta}
+% In Noto's pan-CJK collections face 2 supplies the Simplified Chinese forms.
+\setmainfont[FontIndex=2]{NotoSerifCJK-Regular.ttc}
+\setsansfont[FontIndex=2]{NotoSansCJK-Regular.ttc}
+\newfontfamily\headface[FontIndex=2]{NotoSerifCJK-Medium.ttc}
+\AtBeginDvi{\special{pdf:tounicode UTF8-UCS2}%
+  \special{pdf:docinfo << /Title (操作系统基础讲义) /Subject (进程与线程) >>}%
+  \special{pdf:put @catalog << /Lang (zh-CN) >>}}
+\definecolor{ink}{HTML}{202626}
+\definecolor{slate}{HTML}{4C6065}
+\definecolor{accent}{HTML}{365F69}
+\definecolor{edge}{HTML}{8C9FA3}
+\definecolor{pale}{HTML}{EAF1F1}
+\tikzset{leaf/.style={x=1bp,y=-1bp,inner sep=0pt,outer sep=0pt},
+  hair/.style={draw=edge,line width=.55bp}, wire/.style={draw=accent,line width=.8bp},
+  tip/.style={-{Stealth[length=3.8bp,width=3.3bp]}}}
+\newcommand{\sz}[1]{\fontsize{#1bp}{#1bp}\selectfont}
+\newcommand{\tx}[6][base west]{\node[anchor=#1,text=#4,font={#5}] at (#2,#3) {#6};}
+\newcommand{\labelat}[4][base west]{\tx[#1]{#2}{#3}{slate}{\sffamily\sz{10}}{#4}}
+\newcommand{\bodyline}[2]{\tx{36}{#1}{ink}{\sz{13.3}}{#2}}
+\newcommand{\leafhead}[2]{%
+  \path[use as bounding box] (0,0) rectangle (540,360);
+  \draw[wire] (36,17) -- (46,17) (36,20) -- (46,20) (36,23) -- (42,23);
+  \tx{53}{23.5}{slate}{\sffamily\sz{8.8}}{操作系统基础讲义}
+  \tx[base east]{504}{23.5}{slate}{\sffamily\sz{8.8}}{进程与线程}
+  \draw[hair] (36,33) -- (504,33);
+  \tx{36}{69}{ink}{\headface\sz{21.5}}{#1}
+  \tx{36}{100}{ink}{\sz{14.4}}{#2}}
+\newcommand{\leaffoot}[4]{%
+  \tx{36}{306}{accent}{\sffamily\sz{9.4}}{图 #1}
+  \tx{66}{306}{slate}{\sz{10.2}}{#2}
+  \draw[hair] (36,327) -- (504,327);
+  \tx{36}{346}{slate}{\sffamily\addfontfeatures{LetterSpace=7}\sz{7.8}}{#3}
+  \tx[base east]{504}{346}{ink}{\sz{12.3}}{#4}}
+
+% Each enclosure has its own address-to-value mapping, even at the same address.
+\newcommand{\processmap}[5]{\begin{scope}[shift={(#1,0)}]
+  \draw[hair] (8,215) -- (0,215) -- (0,281) -- (220,281) -- (220,215) -- (50,215);
+  \tx{13}{218.5}{accent}{\sffamily\sz{10.3}}{#2}
+  \labelat{13}{241}{线程 #3} \labelat{13}{265}{线程 #4}
+  \draw[wire] (52,237.5) -- (78,237.5) -- (78,261.5) -- (52,261.5);
+  \foreach \y in {237.5,261.5} {\fill[accent] (52,\y) circle[radius=1.7bp];}
+  \draw[wire,tip] (78,249.5) -- (112,249.5);
+  \fill[pale] (175,240) rectangle (205,259);
+  \draw[hair] (115,240) rectangle (205,259) (175,240) -- (175,259);
+  \tx[base]{145}{234}{slate}{\sffamily\sz{8.7}}{虚拟地址}
+  \tx[base]{190}{234}{slate}{\sffamily\sz{8.7}}{值}
+  \tx[base]{145}{253.6}{ink}{\sffamily\sz{10.5}}{0x1000}
+  \tx[base]{190}{253.7}{ink}{\sz{12}}{#5}
+\end{scope}}
+
+% The arrow returns from the current frame to its caller, on this stack only.
+\newcommand{\callstack}[3]{\begin{scope}[shift={(#1,0)}]
+  \tx{0}{219}{accent}{\sffamily\sz{10.3}}{#2}
+  \draw[hair] (42,215.5) -- (220,215.5);
+  \fill[pale] (41,229) rectangle (141,252);
+  \draw[hair] (41,229) rectangle (141,275) (41,252) -- (141,252);
+  \tx{0}{244.5}{slate}{\sffamily\sz{9}}{栈顶}
+  \draw[hair] (22,240.5) -- (37,240.5);
+  \tx[base]{91}{245}{ink}{\sz{11.5}}{排版}
+  \tx[base]{91}{268}{ink}{\sz{11.5}}{#3}
+  \draw[wire,tip] (141,240.5) -- (159,240.5) -- (159,263.5) -- (143,263.5);
+  \labelat{166}{255.5}{返回}
+\end{scope}}
+
+\begin{document}
+\begin{tikzpicture}[leaf]
+  \leafhead{进程：资源的边界}{进程是资源分配的基本单位。}
+  \bodyline{126}{每个进程有自己的虚拟地址空间和打开的文件表。同一进程里的线程}
+  \bodyline{146}{共用这份地址映射，因此能直接读写同一份数据。}
+  \bodyline{172}{换一个进程，相同的虚拟地址通常指向另一块内存。要跨过这道边界，}
+  \bodyline{192}{可以通过管道传递消息，也可以显式建立共享内存。}
+  \processmap{36}{进程甲}{1}{2}{7} \processmap{284}{进程乙}{3}{4}{9}
+  \leaffoot{1}{同为 0x1000，进程甲读到 7，进程乙读到 9。}{ADDRESS SPACE}{01}
+\end{tikzpicture}
+\begin{tikzpicture}[leaf]
+  \leafhead{线程：执行的路径}{同一进程内的线程共享地址空间，但各自拥有独立的栈。}
+  \bodyline{126}{调度器可以暂停一个线程，先让另一个运行。系统保存被暂停线程的}
+  \bodyline{146}{程序计数器等寄存器的值，以便它恢复时能从原处继续。}
+  \bodyline{172}{两个线程即使调用同一个排版函数，也会在各自的栈上建立栈帧。}
+  \bodyline{192}{其中一个调用返回时，另一个线程的栈帧仍然保留。}
+  \callstack{36}{线程甲}{预览} \callstack{284}{线程乙}{打印}
+  \leaffoot{2}{排版调用结束后，线程甲回到预览，线程乙回到打印。}{CALL STACK}{02}
+\end{tikzpicture}
+\begin{tikzpicture}[leaf]
+  \leafhead{从模型到实践}{快照保留的是复制时的正文。}
+  \bodyline{126}{编辑器的输入线程和保存线程共用正文缓冲区。正文里只有“山”时，}
+  \bodyline{146}{保存线程拿到锁，复制正文得到一份独立快照，然后释放锁。}
+  \bodyline{172}{输入线程随后拿到同一把锁，添上一个“水”字并释放锁。保存线程}
+  \bodyline{192}{此时才把快照写入磁盘：文件里是“山”，屏幕上已是“山水”。}
+  \labelat{36}{219}{时序} \labelat{36}{249}{正文} \labelat{36}{276}{快照}
+  \draw[hair] (36,227) -- (504,227);
+  \foreach \x/\phase/\live in {165/复制正文/山,312/追加文字/山水,459/写入磁盘/山水} {
+    \tx[base]{\x}{219}{accent}{\sffamily\sz{10.3}}{\phase}
+    \tx[base]{\x}{249}{ink}{\sz{12}}{\live}
+    \tx[base]{\x}{276}{ink}{\sz{12}}{山}}
+  \foreach \x in {201,348} {\draw[hair,tip] (\x,215.5) -- ++(75,0);}
+  \draw[wire] (451,280.5) -- (467,280.5);
+  \leaffoot{3}{从追加文字的那一列起，正文与快照不再相同。}{DOCUMENT SNAPSHOT}{03}
+\end{tikzpicture}
+\end{document}

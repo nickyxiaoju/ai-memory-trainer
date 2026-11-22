@@ -9,6 +9,7 @@ import { bindCheckpoint, taskBlanks, type Route, type TaskView } from './checkpo
 import { brand, icon, button, notify, two } from './ui.ts';
 
 const root = document.getElementById('root')!, compact = matchMedia('(max-width: 1039px)');
+const staticDemo = Boolean((window as Window & { FOLIO_STATIC?: boolean }).FOLIO_STATIC);
 const docs: ReadingDoc[] = [demo], memory = new Map<string, Progress>(), drafts = new Map<string,string>(), blankDrafts = new Map<string,string[]>();
 let doc = demo, p = progress(doc), view: 'reader'|'library'|'summary' = 'reader';
 let mode: 'pdf'|'text' = 'pdf', zoom = 1, left = true, right = true, review = false;
@@ -54,7 +55,7 @@ function draw(preserve = false) {
   if (pdfKey && pdfKey !== key && pdfObject) { URL.revokeObjectURL(pdfObject); pdfObject = ''; pdfKey = ''; }
   pdfRequest?.abort(); pdfRequest = undefined;
   const masked = practice && route === 'blank';
-  const body = view === 'reader' ? `<div class="workspace ${left?'':'without-left'} ${right?'':'without-right'}"><aside class="left-rail" aria-label="阅读导航">${Outline(doc,p)}</aside><main id="main" class="reader-scroll" tabindex="-1">${DocumentViewer(doc,p,mode,zoom,review,taskView())}</main><aside class="right-rail" aria-label="学习旁注">${StudySidebar(doc,p,mode,masked)}</aside></div>` : view === 'library' ? DocumentLibrary(docs,progress,filter,query) : LearningSummary(doc,p);
+  const body = view === 'reader' ? `<div class="workspace ${left?'':'without-left'} ${right?'':'without-right'}"><aside class="left-rail" aria-label="阅读导航">${Outline(doc,p)}</aside><main id="main" class="reader-scroll" tabindex="-1">${DocumentViewer(doc,p,mode,zoom,review,taskView())}</main><aside class="right-rail" aria-label="学习旁注">${StudySidebar(doc,p,mode,masked)}</aside></div>` : view === 'library' ? DocumentLibrary(docs,progress,filter,query,staticDemo) : LearningSummary(doc,p);
   root.innerHTML = AppShell(body); activePageKey = key;
   document.title = (view==='library'?'我的资料库':view==='summary'?'章节总结':doc.title) + ' · 页间 Folio';
   if (view === 'reader') {
@@ -222,10 +223,12 @@ async function receive(file?:File) {
   catch(e){stage(e instanceof Error ? e.message : '导入失败，请检查格式后重试。');} finally{importing=false;}
 }
 function bindLibrary() {
-  const input=root.querySelector<HTMLInputElement>('#import-file')!, drop=root.querySelector<HTMLElement>('#drop-zone')!, search=root.querySelector<HTMLInputElement>('#library-search')!;
-  input.onchange=()=>{void receive(input.files?.[0]); input.value='';};
-  drop.ondragover=e=>{e.preventDefault(); drop.classList.add('dragging');}; drop.ondragleave=()=>drop.classList.remove('dragging');
-  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('dragging');void receive(e.dataTransfer?.files[0]);};
+  const input=root.querySelector<HTMLInputElement>('#import-file'), drop=root.querySelector<HTMLElement>('#drop-zone'), search=root.querySelector<HTMLInputElement>('#library-search')!;
+  if (input) input.onchange=()=>{void receive(input.files?.[0]); input.value='';};
+  if (drop) {
+    drop.ondragover=e=>{e.preventDefault(); drop.classList.add('dragging');}; drop.ondragleave=()=>drop.classList.remove('dragging');
+    drop.ondrop=e=>{e.preventDefault();drop.classList.remove('dragging');void receive(e.dataTransfer?.files[0]);};
+  }
   onCommittedInput(search, value=>{query=value;draw();root.querySelector<HTMLInputElement>('#library-search')!.focus();});
   const el=root.querySelector<HTMLElement>('#import-state'); if(el&&importMessage){el.hidden=false;el.textContent=importMessage;}
 }

@@ -56,7 +56,19 @@ function emptyShelf(filter: Filter, query: string, docCount: number) {
   return `<div class="lib-empty"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p></div>`;
 }
 
-function importDesk() {
+function importDesk(staticDemo = false) {
+  if (staticDemo) {
+    return `<aside class="lib-import" aria-labelledby="lib-static-title">
+      <div class="lib-section-heading"><span aria-hidden="true">02</span><h2 id="lib-static-title">在线示例</h2></div>
+      <div class="lib-drop"><span class="lib-drop-symbol">${icon('shield', 24)}</span><strong>在线站点只加载内置讲义</strong><small>不接收文件，也不执行本机解析。</small></div>
+      <dl class="lib-formats">
+        <div><dt>完整本机版</dt><dd>在仓库根运行 <code>npm run dev</code>，可导入 PDF、DOCX、PPTX 与 UTF-8 TXT；导入只发给本机解析进程，不上传云端。</dd></div>
+        <div><dt>PDF 原页</dt><dd>导入的 PDF 由本机 Poppler 渲染；在线示例使用预渲染的原页图。</dd></div>
+      </dl>
+      <p class="lib-local">${icon('local', 16)}<span>示例旁注与检查点使用本地规则，不调用云端 AI；不支持 OCR，扫描件请先添加文字层。</span></p>
+      <p class="lib-local">${icon('file', 16)}<span><a href="/Noto-OFL.txt">Noto 字体许可</a></span></p>
+    </aside>`;
+  }
   return `<aside class="lib-import" aria-labelledby="lib-import-title">
     <div class="lib-section-heading"><span aria-hidden="true">02</span><h2 id="lib-import-title">导入资料</h2></div>
     <div id="drop-zone" class="lib-drop"><span class="lib-drop-symbol">${icon('upload', 24)}</span><strong>将文档拖到这里</strong><small>单个文件不超过 12 MiB</small>
@@ -69,7 +81,7 @@ function importDesk() {
   </aside>`;
 }
 
-export function DocumentLibrary(docs: ReadingDoc[], getProgress: (doc: ReadingDoc) => Progress, filter: Filter, query: string): string {
+export function DocumentLibrary(docs: ReadingDoc[], getProgress: (doc: ReadingDoc) => Progress, filter: Filter, query: string, staticDemo = false): string {
   const entries = docs.map(doc => ({ doc, p: getProgress(doc) }));
   const finished = entries.filter(({ p }) => p.finished);
   const group = filter === 'recent' ? entries.filter(wasOpened).sort((a, b) => b.p.updated - a.p.updated)
@@ -84,7 +96,7 @@ export function DocumentLibrary(docs: ReadingDoc[], getProgress: (doc: ReadingDo
       <div class="lib-section-heading"><span aria-hidden="true">01</span><h2 id="lib-catalog-title">书架目录</h2></div>
       <label class="lib-search">${icon('find', 15)}<input type="search" id="library-search" value="${escapeHtml(query)}" aria-label="搜索书名、章节或格式" placeholder="搜索书名、章节或格式" autocomplete="off"></label></div>
       ${visible.length ? `<ul class="lib-list" aria-label="${escapeHtml(filters[filter])}">${visible.map(shelfRow).join('')}</ul>` : emptyShelf(filter, query.trim(), entries.length)}
-    </section>${importDesk()}</div></main>`;
+    </section>${importDesk(staticDemo)}</div></main>`;
 }
 
 function summaryNav() {

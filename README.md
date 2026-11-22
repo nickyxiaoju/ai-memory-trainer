@@ -1,6 +1,57 @@
-# AI 沉浸式记忆练习助手
+# 页间 Folio · 主动阅读工作台
 
-阿里云天池 AI 算法大赛参赛作品。把任何一段文字（拍照识别的、粘贴进来的）自动变成「逐空默写」训练：
+读一节原文，核对一句关键证据，再决定是否继续。默认打开《操作系统基础讲义》的“进程与线程”：三页原创讲义、两个检查点、一个可回看的章节总结。旧版逐空默写助手仍可独立运行，两者不共享资料或账号。
+
+```bash
+npm run dev
+```
+
+从仓库根运行，打开终端打印的地址（默认 `http://127.0.0.1:5173/`）；换端口用 `npm run dev -- --port 5187`。无需 `npm install` 或 API Key。服务只监听本机回环地址，导入文件不会发往云端。
+
+- **读内置讲义**：只需 Node **22.13+** 和浏览器。原页已从 PDF 预先渲染，不需要 Python 或 Poppler。
+- **导入 DOCX、PPTX 或 UTF-8 TXT**：另需本机 `python3` 和支持资源限制的 POSIX 环境；不需要 Poppler。
+- **导入 PDF**：另需 Poppler 的 `pdfinfo`、`pdftotext`、`pdftocairo`，并须在允许启用 seccomp 过滤器的 Linux（x86_64、aarch64 或 riscv64）上运行。隔离不可用时会拒绝解析，不会改走云端。
+
+## 一次完整的阅读
+
+1. 阅读原页，点琥珀色定义查看旁注；点旁注中的“原文 · 第 1 页”回到那一行。原页使用真实 PDF 的逐页渲染，百分比坐标相对页框，不随缩放漂移；手机默认重排，也可读原页与图表。
+2. 在页下回答理解题。用自己的话说明“同一进程里的线程共享内存，不同进程通常有独立地址空间”即可；缺少一侧会提示差异，不清空答案。**这是演示用概念规则，不是通用 LLM 语义评分器。**
+3. 通过后下一节自然出现，不自动跳走。第二节手动复现原句：保留标点、空格、大小写，统一全半角 ASCII 与 Unicode NFC；中文选词结束后才判定，允许退格，不允许粘贴/拖入。已解锁内容始终可回看，重练不扣回进度。
+4. 读完末页再进入总结。易错概念来自实际误答，不凭空推断。资料库按最近、全部、已完成筛选；资料与 PDF 原件存 IndexedDB，位置与解锁记录存 localStorage，清除站点数据即丢失。
+
+| 格式 | 可以做什么 | 边界 |
+| --- | --- | --- |
+| PDF | 保留原版式与图表、缩放、按页提取、重排、原文锚点 | 无 OCR；纯扫描件需先添加文字层。无法核对的坐标不画高亮。 |
+| DOCX / PPTX / UTF-8 TXT | 真实提取文字、重排、从原文生成复现题 | 不还原 Office 排版、图片或动画；旧 DOC/PPT 请先另存为 PDF。 |
+
+单文件最多 12 MiB，还有页数与解压大小限制。导入仅发送给本机解析进程，临时文件处理完即清理；旁注/检查点明确标记为预设或规则生成。阅读锁是教学流程，不是 DRM。资料库、搜索、恢复、关联原文和总结均不得提前展示未解锁正文。
+
+## 设计和后续迭代
+
+**信息架构**只有资料库、阅读工作台、章节总结。检查点属于原文末尾，不是另一张答题页。桌面用 54px 顶栏、230px 目录、流动宽度的文档和 306px 旁注；手机只留单栏，目录进抽屉，旁注进底部面板。正文字号与留白优先于装饰；靛蓝表示当前操作，琥珀色表示可追溯原句，绿与红只用于反馈。
+
+**可读边界**是第一个未通过的检查点：阅读 → 编辑 → 验证 → 纠错或解锁 → 自主继续。翻页、搜索、重练和恢复只接受该边界内的页码；锁定页不放进阅读 DOM。源文件、标注和任务按同一文档与节索引关联。先把这一条链做通，再加题型、远端分析或跨设备同步。
+
+| 参考 | 取什么，不取什么 |
+| --- | --- |
+| [Readwise Reader 官方高亮演示](https://docs.readwise.io/reader/docs/faqs/highlights-tags-notes) | 从动图看到高亮范围在原文中变化：保留文字级锚点；本版不做自由划线编辑器。 |
+| [RemNote PDF 指南](https://help.remnote.com/en/articles/6690975-learning-from-pdfs-and-files-with-the-remnote-reader) | 从官方截图与文字借鉴按页摘录、点定位回原页，不把整套笔记系统搬进来。 |
+| [Brilliant 官方示例](https://brilliant.org/) | 针对错误部分给下一步，而非只判红叉；不照搬课程闯关。 |
+| [Monkeytype 实际输入页](https://monkeytype.com/) | 让字符、光标和键盘动作成为输入中心，不引入速度排名。 |
+| [Linear 官方工作区截图](https://linear.app/docs/teams) | 稳定分组，区分“去哪里”和“现在做什么”；不套用企业后台布局。 |
+| [NotebookLM 官方引用示例](https://blog.google/innovation-and-ai/products/notebooklm-goes-global-support-for-websites-slides-fact-check/) | 解释回链到具体证据句，而不是挂一份文末书目。 |
+
+这些参考来自公开实页、官方示例或指南，不代表实测了六款产品的登录后体验。长期协作见 [AGENTS.md](AGENTS.md)：产品/取证定义可观察行为，实现负责最短纵向切片，独立验收负责反例与双尺寸浏览器；只有任务可并行时才设协调角色。
+
+**下一轮的顺序**：先用更多教材验证锚点、多栏阅读顺序和误判；再为理解题接一个可选的语义验证端点（最小发送范围、显式同意、超时回到本机）；最后才考虑跨设备进度。每轮用一份具体资料和一个失败样例验收，不预建服务框架。
+
+**代码与测试**：`reader/src/` 为浏览器原生 TypeScript 模块，直接复用经典版的 HTML 转义与 IME 输入事件；`scripts/reader.mjs` 提供本机入口，`scripts/read_document.py` 调用 Poppler 并解析 Office 文档。`reader/public/` 含讲义、逐页原图与 Noto 字体 OFL 许可；可用 `scripts/processes.tex` 重新生成 PDF，再运行 `pdftoppm -png -scale-to 1536 reader/public/processes.pdf reader/public/processes` 更新示例预览。运行 `npm test` 检查阅读边界与判题，`npm run test:documents` 检查解析与渲染。启动服务后可运行 `npm run test:browser`：使用已安装的 Chrome/Chromium、隔离的临时浏览器资料，在 1440×900 与 390×844 复验并保存截图至 `shots/`。自定义地址设 `FOLIO_TEST_URL`，自定义浏览器设 `CHROME_BIN`。
+
+---
+
+# 经典版 · AI 沉浸式记忆练习助手
+
+以下说明仅适用于 `web/` 中的经典版。阿里云天池 AI 算法大赛参赛作品。把任何一段文字（拍照识别的、粘贴进来的）自动变成「逐空默写」训练：
 系统挑出关键词挖成空位，原文照常显示，用户只在空位里填写，每个空独立实时判定对错，
 中途插入闯关测验，结束后给出按空统计的正确率报告。
 
@@ -42,16 +93,21 @@
 脚本加载顺序即依赖顺序，改动时请保持：
 
 ```
-vendor/supabase.js → js/config.js → core → store → api → text → keywords
+vendor/supabase.js → js/config.js → shared → core → store → api → text → keywords
 → quiz → practice → report → auth → cloud → history → profile → app
 ```
 
 ## 目录结构
 
+经典版可直接部署的静态站全部在 `web/`，它使用的目录如下（新阅读器位于独立的 `reader/`）：
+
 ```
 .
 ├── .gitignore
 ├── README.md
+├── package.json                npm 入口：npm run dev:classic（经典版无需 install）
+├── scripts/
+│   └── serve.mjs               本地静态服务器：只服务 web/，防止把仓库根目录暴露出去
 └── web/                        发布目录 = 产品目录，原地即产物
     ├── index.html              DOM 骨架 + 各脚本引用
     ├── css/
@@ -75,8 +131,11 @@ vendor/supabase.js → js/config.js → core → store → api → text → keyw
     │   ├── config.example.js   配置模板（入库，全空值 + 注释）
     │   └── config.js           真实配置：不入库、不在发布目录，见下节
     └── vendor/
-        └── supabase.js         @supabase/supabase-js v2 UMD 本地副本
+        ├── supabase.js         @supabase/supabase-js v2 UMD 本地副本（2.58.0）
+        └── supabase.LICENSE.txt  该副本的 MIT 许可文本
 ```
+
+`scripts/serve.mjs` 是开发工具，不属于发布物；它把请求路径限制在 `web/` 内，避免本地起服务时把仓库根的 `.git`、`README.md` 或未入库的 `_local/` 一起暴露到局域网。
 
 仓库里**不包含**以下内容，均由 `.gitignore` 排除，原因是发布与入库约定要求机密与本机调试产物不得进入代码仓库：
 
@@ -100,7 +159,21 @@ vendor/supabase.js → js/config.js → core → store → api → text → keyw
 `crypto.randomUUID` 都不可用，登录与历史记录会失准。
 
 ```bash
-# 在项目根目录执行（任选一种）
+# 在项目根目录执行
+npm run dev:classic
+```
+
+无需 `npm install`：经典版零依赖，`npm run dev:classic` 调用的是仓库自带的
+`scripts/serve.mjs`，只服务 `web/` 目录。默认地址 <http://127.0.0.1:5173/>，
+端口冲突时换一个：
+
+```bash
+npm run dev:classic -- --port 5174
+```
+
+没有 Node 时，用 Python 的等价命令：
+
+```bash
 python -m http.server 5173 -d web
 # 或 Windows 上
 py -m http.server 5173 -d web
@@ -136,7 +209,8 @@ cp web/js/config.example.js web/js/config.js
 退回系统楷体再到系统黑体。**字体只影响字形观感，不影响任何功能**；
 便签里的「字体风格」开关可在手写体与清晰黑体之间切换。
 
-其他第三方组件许可：`@supabase/supabase-js`（MIT，本地副本见 `web/vendor/supabase.js`）。
+其他第三方组件许可：`@supabase/supabase-js`（MIT，本地副本见 `web/vendor/supabase.js`，
+许可文本见 `web/vendor/supabase.LICENSE.txt`）。
 Hugging Face 与 Groq 只是被调用的推理服务，本项目不分发它们的任何代码或凭据。
 示例文本中的《岳阳楼记》为公版古籍。
 

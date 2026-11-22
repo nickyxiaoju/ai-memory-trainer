@@ -1,8 +1,23 @@
-export function retypeChars(value: string) {
+import type { Blank } from './types';
+import { chars } from './text.ts';
+
+export function retypeChars(value: string): string[] {
   return Array.from(value.normalize('NFC').replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/\u3000/g, ' '));
 }
 
-export function checkAnswer(input: string): { ok: boolean; message: string } {
+export function blankChars(value: string) {
+  return chars(retypeChars(value).join('').trim());
+}
+
+export function matchesBlank(value: string, blank: Blank) {
+  return blankChars(value).join('') === blankChars(blank.answer).join('');
+}
+
+export function blanksDone(values: string[], blanks: Blank[]) {
+  return blanks.map((b, i) => matchesBlank(values[i] || '', b));
+}
+
+export function checkAnswer(input: string): { ok: boolean; message: string; contradicted: boolean } {
   const text = input.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
   const clauses = text.split(/[，。；、,;.!！?？\n]|但是|而且|而|但/).filter(Boolean);
   const resource = /地址空间|内存空间|内存|资源|地址|数据|堆|存储空间/;
@@ -20,7 +35,8 @@ export function checkAnswer(input: string): { ok: boolean; message: string } {
     if (subject === 'process' && hasResource && separate.test(s) && !/不(?:是|相互)?(?:独立|隔离)|没有隔离/.test(s)) isolation = true;
     if ((subject === 'thread' && negShare.test(s)) || (subject === 'process' && shared.test(s) && !separate.test(s))) contradiction = true;
   }
-  if (!contradiction && share && isolation) return { ok: true, message: '你区分了线程共享的资源与进程之间的隔离。' };
-  if (contradiction) return { ok: false, message: '再核对两者的方向：谁在同一个地址空间里，谁通常有独立的空间？' };
-  return { ok: false, message: share ? '已经说清线程的共享关系。再补一句：不同进程的地址空间是什么关系？' : isolation ? '已经提到进程的隔离。再说明同一进程里的线程使用哪一份内存。' : '试着分别描述两层关系：同一进程里的线程怎样使用内存？不同进程之间呢？' };
+  if (!contradiction && share && isolation) return { ok: true, contradicted: false, message: '你区分了线程共享的资源与进程之间的隔离。' };
+  if (contradiction) return { ok: false, contradicted: true, message: '再核对两者的方向：谁在同一个地址空间里，谁通常有独立的空间？可以改这句，也可以直接在原文中填空。' };
+  const missing = share ? '进程之间的隔离' : isolation ? '线程共享了哪一份内存' : '线程共享与进程隔离这两层关系';
+  return { ok: false, contradicted: false, message: `没有确认到${missing}。可以补一句，也可以直接改用原文填空。` };
 }

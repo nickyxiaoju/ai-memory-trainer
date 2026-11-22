@@ -24,15 +24,23 @@ export function restore(doc: ReadingDoc, raw?: Partial<Progress>): Progress {
   p.page = Math.max(0, Math.min(Number.isInteger(raw.page) ? raw.page! : 0, frontier(doc, p)));
   p.mistakes = Array.isArray(raw.mistakes) ? [...new Set(raw.mistakes.filter(i => canRead(doc, p, i) && doc.sections[i].checkpoint))] : [];
   p.finished = raw.finished === true && doc.sections.every((s, i) => !s.checkpoint || p.passed.includes(i));
+  if (raw.via && typeof raw.via === 'object') {
+    const via: Record<string, 'answer' | 'blank' | 'retype'> = {};
+    for (const i of p.passed) {
+      const how = raw.via[String(i)];
+      if (how === 'answer' || how === 'blank' || how === 'retype') via[String(i)] = how;
+    }
+    if (Object.keys(via).length) p.via = via;
+  }
   const at = raw.position;
   if (at && at.page === p.page && (at.mode === 'pdf' || at.mode === 'text') && Number.isFinite(at.offset) && at.offset >= 0) p.position = { page:p.page, mode:at.mode, offset:at.offset };
   p.updated = Number.isFinite(raw.updated) ? raw.updated! : 0;
   return p;
 }
 
-export function completeGate(doc: ReadingDoc, p: Progress, page: number): Progress {
+export function completeGate(doc: ReadingDoc, p: Progress, page: number, how?: 'answer' | 'blank' | 'retype'): Progress {
   return canRead(doc, p, page) && doc.sections[page].checkpoint && !p.passed.includes(page)
-    ? { ...p, passed: [...p.passed, page], updated: Date.now() } : p;
+    ? { ...p, passed: [...p.passed, page], via: how ? { ...p.via, [String(page)]: how } : p.via, updated: Date.now() } : p;
 }
 
 export function searchReadable(doc: ReadingDoc, progress: Progress, term: string) {

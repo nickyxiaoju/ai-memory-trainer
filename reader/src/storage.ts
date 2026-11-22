@@ -43,7 +43,6 @@ export async function importFile(file: File, stage: (s: string) => void): Promis
   if (!res.ok) throw new Error(await res.text());
   const { sections } = await res.json() as { sections: Section[] };
   if (!sections?.length) throw new Error('没有找到可供练习的原文。');
-  const doc: ReadingDoc = { id: crypto.randomUUID(), title: file.name.replace(/\.[^.]+$/, '') || file.name, chapter: '文档阅读', format: ext.toUpperCase() as ReadingDoc['format'], sections };
-  if (doc.format === 'PDF') doc.file = file;
+  const doc: ReadingDoc = { id: crypto.randomUUID(), title: file.name.replace(/\.[^.]+$/, '') || file.name, chapter: '文档阅读', format: ext.toUpperCase() as ReadingDoc['format'], sections, file };
   stage('解析完成，正在保存到此浏览器…'); await saveImport(doc); return doc;
 }

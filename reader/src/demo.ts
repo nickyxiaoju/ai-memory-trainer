@@ -3,6 +3,8 @@ import type { ReadingDoc } from './types';
 const processDefinition = '进程是资源分配的基本单位。';
 const threadDefinition = '同一进程内的线程共享地址空间，但各自拥有独立的栈。';
 const snapshotDefinition = '快照保留的是复制时的正文。';
+const processMemory = '每个进程有自己的虚拟地址空间和打开的文件表。同一进程里的线程共用这份地址映射，因此能直接读写同一份数据。';
+const crossingMemory = '换一个进程，相同的虚拟地址通常指向另一块内存。要跨过这道边界，可以通过管道传递消息，也可以显式建立共享内存。';
 
 // Section i corresponds to PDF page i + 1. Quote rects come from pdftotext -bbox.
 export const demo: ReadingDoc = {
@@ -16,8 +18,8 @@ export const demo: ReadingDoc = {
       title: '进程：资源的边界',
       paragraphs: [
         processDefinition,
-        '每个进程有自己的虚拟地址空间和打开的文件表。同一进程里的线程共用这份地址映射，因此能直接读写同一份数据。',
-        '换一个进程，相同的虚拟地址通常指向另一块内存。要跨过这道边界，可以通过管道传递消息，也可以显式建立共享内存。',
+        processMemory,
+        crossingMemory,
         '同为 0x1000，进程甲读到 7，进程乙读到 9。',
       ],
       annotation: {
@@ -30,6 +32,22 @@ export const demo: ReadingDoc = {
         kind: 'answer',
         prompt: '为什么同一进程内的线程可以直接访问同一份数据，而不同进程通常不能？',
         hint: '对照图 1：相同的地址写在两个边框里，读到的值一样吗？',
+        blanks: [
+          {
+            answer: '共用这份地址映射',
+            quote: '同一进程里的线程共用这份地址映射，因此能直接读写同一份数据。',
+            offset: 8,
+            paragraph: 1,
+            rects: [[0.066668, 0.373056, 0.197041, 0.036944]],
+          },
+          {
+            answer: '另一块内存',
+            quote: '换一个进程，相同的虚拟地址通常指向另一块内存。要跨过这道边界，可以通过管道传递消息，也可以显式建立共享内存。',
+            offset: 17,
+            paragraph: 2,
+            rects: [[0.485379, 0.445278, 0.12315, 0.036944]],
+          },
+        ],
       },
     },
     {
@@ -47,10 +65,16 @@ export const demo: ReadingDoc = {
         rects: [[0.066668, 0.242589, 0.666679, 0.04]],
       },
       checkpoint: {
-        kind: 'retype',
-        prompt: '请逐字复现本页说明地址空间与栈的那句话，保留原文标点。',
-        target: threadDefinition,
-        hint: '回想逗号前后各讲了什么，再检查句末标点。',
+        kind: 'blank',
+        prompt: '补全本页说明内存共享与调用栈的那句话。',
+        hint: '“共享”之后、逗号之前是四个字。',
+        blanks: [{
+          answer: '地址空间',
+          quote: threadDefinition,
+          offset: 10,
+          paragraph: 0,
+          rects: [[0.33334, 0.242583, 0.106669, 0.04]],
+        }],
       },
     },
     {

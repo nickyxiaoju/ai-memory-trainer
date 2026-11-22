@@ -109,8 +109,10 @@ export function LearningSummary(doc: ReadingDoc, p: Progress): string {
     const s = doc.sections[page];
     const title = s.annotation?.label || s.title;
     const source = `第 ${page + 1} ${unit(doc)}`;
+    const how = p.via?.[String(page)];
+    const method = how === 'blank' ? '经原文填空核对' : how === 'answer' ? '理解题通过' : how === 'retype' ? '逐字复现' : s.checkpoint?.kind === 'blank' ? '原文填空' : s.checkpoint?.kind === 'retype' ? '原文复现' : '理解题';
     return `<li><button type="button" class="summary-retry" data-act="retry-at" data-page="${escapeHtml(page)}" aria-label="${escapeHtml(`重练${source}：${title}`)}">
-      <span><small>${escapeHtml(source)} · ${escapeHtml(s.checkpoint?.kind === 'retype' ? '原文复现' : '理解题')}${mistakes.has(page) ? ' · <b>曾有误答</b>' : ''}</small><strong>${escapeHtml(title)}</strong></span><span class="summary-retry-mark">重练 ${icon('redo', 13)}</span></button></li>`;
+      <span><small>${escapeHtml(source)} · ${escapeHtml(method)}${mistakes.has(page) ? ' · <b>曾有误答</b>' : ''}</small><strong>${escapeHtml(title)}</strong></span><span class="summary-retry-mark">重练 ${icon('redo', 13)}</span></button></li>`;
   }).join('');
   return `<main id="main" class="summary-page" tabindex="-1" aria-labelledby="summary-title">${summaryNav()}
     <header class="summary-mast"><p class="summary-kicker" lang="en">Folio / Reading notes</p><div class="summary-title-line"><div>

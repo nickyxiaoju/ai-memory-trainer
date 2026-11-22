@@ -4,6 +4,7 @@ async function startPractice() {
   const raw = $('srcText').value.trim();
   if (!raw) { toast('请先粘贴文本，或上传图片识别文字', 'warn'); return; }
   S.demoMode = $('demoMode').checked;
+  saveCfg();
 
   const segs = splitSegments(raw);
   if (!segs.length) { toast('文本太短，无法分段', 'warn'); return; }
@@ -40,6 +41,7 @@ async function startPractice() {
 }
 
 function finish() {
+  if (!S.inPractice) return;          // 防止连点/回车重复落一份记录
   clearInterval(S.timerId);
   S.inPractice = false;
   // 报告页与历史记录共用同一份数字，避免「屏幕上的正确率」与「存下来的正确率」不一致

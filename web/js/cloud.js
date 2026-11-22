@@ -79,10 +79,22 @@ const Cloud = {
     }));
   },
 
+  /** 分批写逐空明细；重复行按成功处理，其它错误返回失败让记录留在待同步队列 */
+  async writeBlanks(sessionId, rec) {
+    let ok = true, error = '';
+    const rows = this.blankRows(sessionId, rec);
+    for (let i = 0; i < rows.length; i += this.BATCH) {
+      const part = rows.slice(i, i + this.BATCH);
+      const r = await this.client.from('blanks').insert(part);
+      if (r.error && !this.isDuplicate(r.error)) { ok = false; error = this.msg(r.error); break; }
+    }
+    return { ok: ok, error: error };
+  },
+
   /**
    * 上传一条练习记录：先写 sessions 拿回 id，再分批写 blanks。
-   * 返回 { ok, cloudId, blanksOk, error }，调用方据此决定 toast 文案，
-   * 无论成败都要把本机记录留下（离线优先）。
+   * 只有 sessions 与 blanks 都成功才标记 synced；否则记录留在本机，
+   * 下次同步会走去重分支，把缺失的逐空明细补齐（重复行由唯一索引挡掉）。
    */
   async saveSession(rec) {
     if (!this.ready()) return this.skipped();
@@ -93,21 +105,20 @@ const Cloud = {
         if (this.isDuplicate(error)) {
           const found = await this.client.from('sessions')
             .select('id').eq('client_id', rec.id).maybeSingle();
-          if (found.data) { History.markSynced(rec.id, found.data.id); return { ok: true, cloudId: found.data.id, deduped: true }; }
-          return { ok: false, error: this.msg(error) };
+          if (found.error) return { ok: false, error: this.msg(found.error) };
+          if (!found.data) return { ok: false, error: this.msg(error) };
+          const b = await this.writeBlanks(found.data.id, rec);
+          if (!b.ok) return { ok: false, cloudId: found.data.id, deduped: true, error: b.error };
+          History.markSynced(rec.id, found.data.id);
+          return { ok: true, cloudId: found.data.id, deduped: true };
         }
         return { ok: false, error: this.msg(error) };
       }
       const sessionId = data.id;
-      let blanksOk = true, blankErr = '';
-      const rows = this.blankRows(sessionId, rec);
-      for (let i = 0; i < rows.length; i += this.BATCH) {
-        const part = rows.slice(i, i + this.BATCH);
-        const r = await this.client.from('blanks').insert(part);
-        if (r.error && !this.isDuplicate(r.error)) { blanksOk = false; blankErr = this.msg(r.error); break; }
-      }
+      const b = await this.writeBlanks(sessionId, rec);
+      if (!b.ok) return { ok: false, cloudId: sessionId, error: b.error };
       History.markSynced(rec.id, sessionId);
-      return { ok: true, cloudId: sessionId, blanksOk: blanksOk, error: blankErr };
+      return { ok: true, cloudId: sessionId };
     } catch (e) {
       return { ok: false, error: this.msg(e) };
     }

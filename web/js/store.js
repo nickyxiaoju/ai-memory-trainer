@@ -71,7 +71,9 @@ const Store = {
       if (el.type === 'checkbox') el.checked = !!p[k]; else el.value = p[k];
     });
     S.demoMode = !!$('demoMode').checked;
-    document.documentElement.style.setProperty('--fs', $('optBig').checked ? '22px' : '18px');
+    const big = $('optBig').checked;
+    document.documentElement.style.setProperty('--fs', big ? '22px' : '18px');
+    document.documentElement.classList.toggle('t-big', big);
   },
 
   /* ---------- 历史 ---------- */
@@ -81,7 +83,9 @@ const Store = {
   },
   saveHistory(list) {
     const trimmed = list.slice(0, this.HISTORY_LIMIT);
-    if (!this.write(this.key(this.BASE_HISTORY), trimmed)) toast('本机存储写入失败，历史记录没能保存', 'warn');
+    const ok = this.write(this.key(this.BASE_HISTORY), trimmed);
+    if (!ok) toast('本机存储写入失败，历史记录没能保存', 'warn');
+    return ok;
   },
   unsynced() { return this.history().filter(r => !r.synced); },
 
@@ -102,7 +106,8 @@ const Store = {
     anon.forEach(r => {
       if (r && r.id && !have.has(r.id)) { mine.push(Object.assign({}, r, { synced: false })); moved++; }
     });
-    if (moved) this.saveHistory(mine);
+    // 写入失败时保留 anon 桶，否则这些记录会既没进当前账号、也被删掉
+    if (moved && !this.saveHistory(mine)) return 0;
     this.remove(anonKey);
     return moved;
   }

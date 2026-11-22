@@ -128,10 +128,7 @@ function makeBlankSlot(b) {
   // aria-label 只报位置和字数，绝不念出关键词：念出来就是把答案读给了读屏用户
   inp.setAttribute('aria-label', '第 ' + (b.segIdx + 1) + ' 段第 ' + (b.idx + 1) + ' 空，需填 ' + blankLen(b) + ' 个字');
 
-  inp.addEventListener('compositionstart', () => { b.composing = true; });
-  // 组合期间不判定：中文输入法的半候选会被判成红叉，用户还没选完字就被标错
-  inp.addEventListener('compositionend', () => { b.composing = false; rejudgeBlank(b); });
-  inp.addEventListener('input', (e) => { if (!b.composing && !(e && e.isComposing)) rejudgeBlank(b); });
+  onCommittedInput(inp, () => rejudgeBlank(b), composing => { b.composing = composing; });
   inp.addEventListener('focus', () => { activeBlank = b; updateHintCounter(); });
   inp.addEventListener('blur', () => { commitBlank(b); });
   inp.addEventListener('keydown', (e) => onBlankKey(e, b));

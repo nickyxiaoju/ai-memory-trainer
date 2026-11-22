@@ -45,6 +45,14 @@ const App = {
     if (event === 'SIGNED_OUT') {
       Auth.session = null;
       Auth.apply(null);
+      // 退出后切回匿名命名空间：先清空输入框，再按匿名桶回填；
+      // 保留匿名桶里「登录前记住的密钥」，但绝不会把上一个账号的密钥留在界面上
+      $('hfToken').value = '';
+      $('groqKey').value = '';
+      $('rememberKeys').checked = false;
+      $('srcText').value = '';
+      loadCfg();
+      updateSplitInfo();
       App.renderChip();
       // 只复位账号态：正在默写的段落、计时、进度全部保留，不打断练习
       if ($('screen-profile').classList.contains('on') || $('screen-auth').classList.contains('on')) go('home');
@@ -70,6 +78,10 @@ const App = {
     this.signInBusy = true;
     try {
       Store.mergeAnonIntoSelf();
+      // 账号命名空间刚切换：把该账号保存的偏好与密钥回填到表单，
+      // 否则会拿匿名桶的值去覆盖云端偏好（重载后尤其明显）
+      loadCfg();
+      updateSplitInfo();
       const p = await Cloud.loadProfile();
       if (p.ok) {
         const localPrefs = Store.prefs();
@@ -105,7 +117,7 @@ const App = {
     if (Cloud.ready()) {
       // 报告页不能因为网络慢而卡住：云端写入放在后台，回来再提示结果
       Cloud.saveSession(rec).then(r => {
-        if (r.ok) toast(r.blanksOk === false ? '记录已同步，但逐空明细写入失败：' + r.error : '本次记录已同步到你的账号');
+        if (r.ok) toast('本次记录已同步到你的账号');
         else toast('记录已存在本机，云端同步失败：' + r.error, 'warn');
         if ($('screen-profile').classList.contains('on')) Profile.refresh();
         Profile.renderSyncInfo();
@@ -267,6 +279,8 @@ const App = {
     Store.clearSecrets();
     History.clearAll();
     Store.remove(Store.key(Store.BASE_PREFS));
+    $('srcText').value = '';
+    S.demoMode = $('demoMode').checked;
     refreshKeyState();
     updateSplitInfo();
     Profile.localRows = [];
@@ -307,7 +321,7 @@ const Landing = {
 
   init() {
     $$('.fsdot').forEach(d => { d.onclick = () => this.jump(d.dataset.fs); });
-    const hint = $('.fs-hint');
+    const hint = document.querySelector('.fs-hint');
     if (hint) hint.onclick = () => this.jump(hint.dataset.fs);
     if (!('IntersectionObserver' in window)) return;
     this.io = new IntersectionObserver((entries) => {
@@ -433,7 +447,14 @@ function bind() {
 
   // 首页
   $('goSetup').onclick = () => { go('setup'); };
-  $('goSetupDemo').onclick = () => { $('demoMode').checked = true; S.demoMode = true; refreshKeyState(); go('setup'); toast('已开启演示模式：使用本地算法，无需 API Key'); };
+  $('goSetupDemo').onclick = () => {
+    $('demoMode').checked = true;
+    S.demoMode = true;
+    saveCfg();
+    refreshKeyState();
+    go('setup');
+    toast('已开启演示模式：使用本地算法，无需 API Key');
+  };
 
   // 配置
   ['hfToken', 'groqKey', 'ocrModel', 'groqModel', 'chunk'].forEach(id => $(id).addEventListener('change', () => { saveCfg(); refreshKeyState(); updateSplitInfo(); }));
@@ -455,17 +476,33 @@ function bind() {
   });
 
   // 图片 OCR
-  $('btnUploadPick').onclick = () => $('imgFile').click();
-  $('btnOcrFileInput').onclick = () => $('imgFile').click();
+  let thumbUrl = '';
+  $('btnUploadPick').onclick = () => { $('imgFile').dataset.ocr = '1'; $('imgFile').click(); };
+  $('btnOcrFileInput').onclick = () => { $('imgFile').dataset.ocr = '0'; $('imgFile').click(); };
   $('imgFile').addEventListener('change', async (e) => {
-    const f = e.target.files && e.target.files[0];
+    const input = e.target;
+    const f = input.files && input.files[0];
     if (!f) return;
-    $('thumb').src = URL.createObjectURL(f); $('thumb').style.display = 'block';
+    if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+    thumbUrl = URL.createObjectURL(f);
+    $('thumb').src = thumbUrl;
+    $('thumb').style.display = 'block';
     $('ocrState').textContent = '已选择：' + f.name;
-    if (!$('hfToken').value.trim()) { toast('未填写 Hugging Face Token，无法在线识别。可切到「粘贴文本」标签页直接贴入内容。', 'warn'); return; }
+    if (input.dataset.ocr === '0') {
+      $('ocrState').textContent = '已选择：' + f.name + '（未识别）';
+      input.value = '';
+      return;
+    }
+    const token = $('hfToken').value.trim();
+    if (!token) {
+      $('ocrState').textContent = '已选择：' + f.name + '（缺少 Token，未识别）';
+      toast('未填写 Hugging Face Token，无法在线识别。可切到「粘贴文本」标签页直接贴入内容。', 'warn');
+      input.value = '';
+      return;
+    }
     showVeil('正在识别图片中的文字…', '首次调用可能需要模型冷启动，最长约 1 分钟。');
     try {
-      const txt = await hfOcr(f, $('hfToken').value.trim(), $('ocrModel').value.trim(), $('ocrEngine').value);
+      const txt = await hfOcr(f, token, $('ocrModel').value.trim(), $('ocrEngine').value);
       const tidy = tidyOcrText(txt);
       $('srcText').value = $('srcText').value.trim() ? $('srcText').value.trim() + '\n' + tidy : tidy;
       InputTabs.showText();          // 结果在「粘贴文本」页里，不把那页翻出来用户看不见
@@ -475,7 +512,7 @@ function bind() {
     } catch (err) {
       $('ocrState').textContent = '识别失败';
       toast('识别失败：' + friendlyErr(err) + '（也可切到「粘贴文本」标签页，把文字手动贴进去）', 'err');
-    } finally { hideVeil(); $('imgFile').value = ''; }
+    } finally { hideVeil(); input.value = ''; }
   });
 
   // 练习：空位是逐个渲染出来自己挂监听的，这里只管三个按钮
@@ -486,6 +523,7 @@ function bind() {
   $('btnReveal').onclick = () => hintOnce();
   $('btnSpeak').onclick = () => curSeg && speak(curSeg.text);
   $('btnQuit').onclick = () => {
+    if (!S.inPractice) return;
     if (!confirm('确定退出本次练习吗？本次已练习的进度会作为「中途退出」记录保存。')) return;
     clearInterval(S.timerId);
     // 闯关题还开着就退出：必须关掉遮罩并解开等待，否则回到准备页会被浮层盖住；
@@ -494,6 +532,10 @@ function bind() {
       if (!S.quizResult) S.quizResult = 'skipped';
       closeQuizVeil('quit');
     }
+    S.inPractice = false;
+    curSeg = null;
+    activeBlank = null;
+    advancing = false;
     App.persist(false);
     go('setup');
   };
@@ -563,6 +605,7 @@ function bind() {
   });
   // 闯关浮层是模态的：Tab 圈在浮层内，关掉之后焦点由 closeQuizVeil 还回来
   $('quizVeil').addEventListener('keydown', (e) => { if (e.key === 'Tab') trapTab(e, $('quizVeil')); });
+  $('migrateVeil').addEventListener('keydown', (e) => { if (e.key === 'Tab') trapTab(e, $('migrateVeil')); });
   $('qSubmit').onclick = submitQuiz;
   $('qSkipBtn').onclick = () => { S.quizResult = 'skipped'; closeQuizVeil('skipped'); toast('已跳过本题'); };
 }
@@ -582,7 +625,6 @@ function updateSplitInfo() {
   Cloud.init();
   loadCfg();
   S.demoMode = $('demoMode').checked;
-  document.documentElement.style.setProperty('--fs', '18px');
   bind();
   // 首次加载停在首页时没人调用过 go()，分屏吸附的开关类必须自己补上，
   // 否则「刷新页面就没有吸附、点过一遍导航才有」这种不一致很难解释。

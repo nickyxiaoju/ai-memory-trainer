@@ -83,9 +83,13 @@ async function runCheckpointQuiz() {
     q.options.forEach((o, i) => {
       const lab = document.createElement('label');
       lab.className = 'q-opt';
-      lab.innerHTML = '<label class="check" style="width:100%"><input type="radio" name="qr" value="' + escapeHtml(o) + '"> ' +
-                      escapeHtml(String.fromCharCode(65 + i)) + '. ' + escapeHtml(o) + '</label>';
-      lab.querySelector('input').addEventListener('change', () => {
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'qr';
+      input.value = o;
+      lab.appendChild(input);
+      lab.appendChild(document.createTextNode(String.fromCharCode(65 + i) + '. ' + o));
+      input.addEventListener('change', () => {
         $$('#qArea .q-opt').forEach(x => x.classList.remove('sel'));
         lab.classList.add('sel');
       });

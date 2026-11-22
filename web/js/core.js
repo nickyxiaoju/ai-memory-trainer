@@ -34,11 +34,6 @@ function trapTab(e, box) {
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 }
 
-/** HTML 转义（所有拼进 innerHTML 的动态文本都必须先过这里） */
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
 /** 毫秒 -> mm:ss */
 function mmss(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -104,7 +99,7 @@ const AppConfig = {
 
   load() {
     const raw = window.APP_CONFIG || {};
-    this.url = String(raw.supabaseUrl || '').trim();
+    this.url = String(raw.supabaseUrl || '').trim().replace(/\/+$/, '');
     this.anonKey = String(raw.supabaseAnonKey || '').trim();
     this.phoneOtp = raw.phoneOtp === true;
     this.ready = true;
@@ -178,7 +173,7 @@ function go(name) {
     d.classList.toggle('on', n <= (stepMap[name] || 0));
   });
   $$('.navtab').forEach(b => {
-    const group = ({ setup: 'learn', practice: 'learn', report: 'learn', profile: 'profile' })[name] || '';
+    const group = ({ setup: 'setup', practice: 'setup', report: 'setup', profile: 'profile' })[name] || '';
     b.classList.toggle('on', b.dataset.goto === group);
   });
   document.documentElement.classList.toggle('snap-home', name === 'home');

@@ -16,6 +16,7 @@
   --blue-050:#eef6fb;
   --amber-500:#e0a23c;
   --red-500:#d24c4c;
+  --red-700:#a83232;
   --red-050:#fdeeee;
   --ink:#17322c;
   --ink-2:#4a6b63;
@@ -158,6 +159,9 @@ textarea.inp{min-height:150px;resize:vertical;line-height:1.8;font-size:17px}
 .btn:hover{filter:brightness(1.04);transform:translateY(-1px)}
 .btn:active{transform:translateY(0)}
 .btn:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
+/* 「下一段」保持可点击（点了会提示哪几个空没写对），用弱化外观表达尚未就绪 */
+.btn[aria-disabled="true"]{opacity:.62;box-shadow:none}
+.btn[aria-disabled="true"]:hover{transform:none;filter:none}
 .btn.big{padding:15px 40px;font-size:19px}
 .btn.ghost{background:#fff;color:var(--green-700);border:1.5px solid var(--green-200);box-shadow:none}
 .btn.blue{background:var(--blue-500);box-shadow:0 6px 16px rgba(46,139,192,.24)}
@@ -211,6 +215,7 @@ textarea.inp{min-height:150px;resize:vertical;line-height:1.8;font-size:17px}
 .q-opt{display:block;border:1.5px solid var(--line);border-radius:var(--r-s);padding:10px 14px;margin-bottom:9px;cursor:pointer;transition:.15s;background:#fdfffe}
 .q-opt:hover{border-color:var(--green-200);background:var(--green-050)}
 .q-opt.sel{border-color:var(--green-500);background:var(--green-050)}
+.q-opt input{margin-right:8px;accent-color:var(--green-500)}
 .q-body{font-size:17px;margin:8px 0 14px}
 .q-src{font-size:14px;color:var(--ink-3);border-left:3px solid var(--line);padding-left:10px;margin:10px 0}
 

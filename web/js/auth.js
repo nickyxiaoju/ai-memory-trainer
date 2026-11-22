@@ -14,7 +14,7 @@ const Auth = {
   session: null,
   busy: false,           // 防止连点重复提交
   note: '',              // 最近一次需要向用户说明的、非「错误」的事实
-  PENDING_RESET: 'memtr…set',
+  PENDING_RESET: 'memtrainer_pending_reset',
 
   /* ---------- 初始化与恢复 ---------- */
 

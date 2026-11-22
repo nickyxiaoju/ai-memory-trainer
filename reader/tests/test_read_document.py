@@ -152,28 +152,54 @@ class ReaderCLI(unittest.TestCase):
         self.assertEqual(list(self.tmp.glob('local-reader-*')), [])
         return result.stdout if success else result.stderr.decode()
 
-    def sections(self, data, fmt):
+    def sections(self, data, fmt, require=True):
         result = json.loads(self.cli(data, 'analyse', fmt))['sections']
         checkpoints = 0
         for section in result:
             if 'checkpoint' in section:
                 checkpoints += 1
                 cp = section['checkpoint']
-                quote = section['annotation']['quote']
-                self.assertEqual(cp['kind'], 'retype')
-                self.assertEqual(cp['target'], quote)
-                self.assertTrue(0 < len(quote) <= 72)
-                self.assertTrue(any(quote in p for p in section['paragraphs']))
-        self.assertGreater(checkpoints, 0)
+                self.assertEqual(cp['kind'], 'blank')
+                self.assertTrue(cp['blanks'])
+                for blank in cp['blanks']:
+                    quote, answer = blank['quote'], blank['answer']
+                    self.assertTrue(0 < len(quote) <= 72)
+                    self.assertIn(answer, quote)
+                    self.assertEqual(quote[blank['offset']:blank['offset'] + len(answer)], answer)
+                    self.assertTrue(any(quote in p for p in section['paragraphs']))
+                    if 'paragraph' in blank:
+                        self.assertIn(quote, section['paragraphs'][blank['paragraph']])
+                    for x, y, w, h in blank.get('rects', []):
+                        self.assertTrue(0 <= x < x + w <= 1 and 0 <= y < y + h <= 1)
+        if require:
+            self.assertGreater(checkpoints, 0)
         return result
+
+    def test_sample_pdf_phrase_rect_matches_address_space(self):
+        try:
+            import gi
+            gi.require_version('Poppler', '0.18')
+            from gi.repository import Poppler  # noqa: F401
+        except (ImportError, ValueError):
+            self.skipTest('Poppler GLib typelib is optional for phrase boxes')
+        data = (Path(__file__).resolve().parents[2] / 'reader' / 'public' / 'processes.pdf').read_bytes()
+        sections = self.sections(data, 'pdf')
+        blank = sections[1]['checkpoint']['blanks'][0]
+        self.assertEqual(blank['answer'], '地址空间')
+        self.assertEqual(len(blank['rects']), 1)
+        x, y, w, h = blank['rects'][0]
+        self.assertAlmostEqual(x, 0.33334, places=4)
+        self.assertAlmostEqual(y, 0.24259, places=4)
+        self.assertAlmostEqual(w, 0.10667, places=4)
 
     def test_txt_preserves_significant_spaces_and_utf8(self):
         sections = self.sections('\ufeffFirst  sentence.\r\n第二行\r\n  \r\nNext.\f末节'.encode(), 'txt')
         self.assertEqual([s['paragraphs'] for s in sections], [['First  sentence.\n第二行', 'Next.'], ['末节']])
         self.assertNotIn('rects', sections[0]['annotation'])
-        indented, = self.sections(b'   indented\ttext.  ', 'txt')
+        indented, = self.sections(b'   indented\ttext.  ', 'txt', require=False)
         self.assertEqual(indented['paragraphs'], ['   indented\ttext.  '])
-        self.assertNotIn('\t', indented['checkpoint']['target'])
+        self.assertNotIn('checkpoint', indented)
+        self.assertNotIn('\t', indented['annotation']['quote'])
         for data in (b'\xff', b'a\x00b', b'  \n\t', b''):
             self.cli(data, 'analyse', 'txt', success=False)
 
@@ -238,6 +264,9 @@ class ReaderCLI(unittest.TestCase):
                 data = pdf([TEXT], rotate=rot)
                 s, = self.sections(data, 'pdf')
                 self.assertEqual(s['annotation']['quote'], 'Hello source.')
+                if rot and 'checkpoint' in s:
+                    for blank in s['checkpoint']['blanks']:
+                        self.assertNotIn('rects', blank)
                 rects = s['annotation']['rects']
                 w, h, ink = png_ink(self.cli(data, 'render', '1', '320'))
                 self.assertEqual((w, h), (320, 452 if rot % 180 else 227))
@@ -266,8 +295,9 @@ class ReaderCLI(unittest.TestCase):
         png = self.cli(pdf([TEXT], crop=box, media=box), 'render', '1', '2400')
         self.assertEqual(struct.unpack_from('>II', png, 16), (2400, 3200))
         box = (0, 0, 1200, 240)
-        s, = self.sections(pdf([b'BT /F 12 Tf 50 90 Td (' + b'W' * 90 + b') Tj ET'], media=box, crop=box), 'pdf')
+        s, = self.sections(pdf([b'BT /F 12 Tf 50 90 Td (' + b'W' * 90 + b') Tj ET'], media=box, crop=box), 'pdf', require=False)
         self.assertNotIn('rects', s['annotation'])
+        self.assertNotIn('checkpoint', s)
 
     @unittest.skipUnless(shutil.which('gs'), 'Ghostscript is optional for generating encrypted fixtures')
     def test_encrypted_pdf_including_empty_user_password(self):

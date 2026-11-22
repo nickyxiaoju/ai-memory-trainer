@@ -97,12 +97,83 @@ def quote_score(quote):
             quote.endswith(('。', '！', '？', '.', '!', '?')), min(letters, 18))
 
 
+PHRASE_STOP = {
+    '一个', '这个', '那个', '每个', '自己', '可以', '能够', '因此', '所以', '但是', '如果',
+    '以及', '并且', '而且', '通过', '进行', '使用', '拥有', '通常', '同时', '其中', '不是',
+    '没有', '已经', '需要', '可能', '这样', '那样', '什么', '怎么', '我们', '你们', '他们',
+}
+LATIN_STOP = {'the', 'and', 'for', 'with', 'that', 'this', 'from', 'are', 'was', 'you', 'your'}
+PHRASE_KEYS = re.compile(r'空间|内存|进程|线程|数据|资源|系统|模型|函数|单位|地址|文件|栈|锁|表|器|区|性|度|法|磁盘|介质|快照|缓存|帧|映射')
+
+
+BEIJING = re.compile(r'[\u3400-\u9fff\uf900-\ufaff]+')
+EDGE = '的了着和与及或在把被为对从向给但是而也就都又则却还是有着过一份个种些项条次位'
+PHRASE_PREFIX = ('一份', '一种', '这个', '那个', '每个', '其中', '然后', '因此', '所以', '但是', '如果',
+                 '通过', '以及', '并且', '同时', '各自', '自己', '已经', '可以', '能够', '通常', '不同', '相同',
+                 '同一', '这种', '那种', '每种', '某一')
+PHRASE_SUFFIX = ('共享', '拥有', '保存', '指向', '建立', '调用', '返回', '得到', '保留', '读取', '写入',
+                 '运行', '暂停', '释放', '复制', '重启', '访问')
+
+
+def choose_phrase(quote):
+    """Choose a real short phrase inside quote by sliding over the source text.
+
+    Never split a word on a single character: '地' belongs to '地址', and a quiz
+    must not turn that into '址空间'. Every candidate is a literal substring.
+    """
+    text = quote.strip()
+    if len(text) < 8:
+        return None
+    definition = re.search(r'(?:是|指|称为)([^，。；：！？,;:!?]{2,12})[。；]?$', text)
+    if definition:
+        phrase = definition.group(1).strip()
+        if 2 <= len(phrase) <= 12 and phrase not in PHRASE_STOP and text.count(phrase) == 1 and len(text) - len(phrase) >= 3:
+            return phrase
+    candidates = []
+    for run in BEIJING.findall(text):
+        for length in range(2, min(6, len(run)) + 1):
+            for start in range(0, len(run) - length + 1):
+                piece = run[start:start + length]
+                if piece in PHRASE_STOP or piece[0] in EDGE or piece[-1] in EDGE:
+                    continue
+                if piece.startswith(PHRASE_PREFIX) or piece.endswith(PHRASE_SUFFIX) or '的' in piece:
+                    continue
+                candidates.append(piece)
+    for word in re.findall(r"[A-Za-z][A-Za-z'-]{2,}", text):
+        if word.lower() not in LATIN_STOP:
+            candidates.append(word)
+    candidates = [c for c in dict.fromkeys(candidates) if text.count(c) == 1 and len(text) - len(c) >= 3]
+    if not candidates:
+        return None
+    def score(p):
+        quality = 0
+        keys = {m.group(0) for m in PHRASE_KEYS.finditer(p)}
+        quality += 3 * len(keys)
+        if len(p) == 4:
+            quality += 3
+        elif len(p) in (3, 5):
+            quality += 2
+        elif len(p) == 6:
+            quality += 1
+        at = text.find(p)
+        if at > 0 and at + len(p) < len(text):
+            quality += 1
+        if text.find(p) > len(text) / 3:
+            quality += 1
+        return (quality, -abs(len(p) - 4), -text.find(p), len(p))
+    # '址空间' is only a cut inside '地址空间'; keep the longer, better phrase.
+    def cut(p):
+        return any(p in q and q.index(p) > 0 for q in candidates if q != p and score(q) > score(p))
+    kept = [c for c in candidates if not cut(c)]
+    return max(kept or candidates, key=score)
+
+
 class Sections:
     def __init__(self):
         self.items = []
         self.chars = self.paragraphs = 0
 
-    def add(self, title, paragraphs, *, anchor=None, empty_notice=None):
+    def add(self, title, paragraphs, *, anchor=None, locate=None, empty_notice=None):
         if len(self.items) >= MAX_PAGES:
             raise DocumentError(TOO_MANY_PAGES)
         self.chars += sum(map(len, paragraphs))
@@ -114,18 +185,40 @@ class Sections:
             if anchor is None:
                 # Keep the exercise on one line; a tab in Word is not a key the reader
                 # should have to enter in the web text field.
-                quotes = (excerpt(part) for p in paragraphs for line in p.splitlines()
-                          for part in line.split('\t') if part.strip())
-                quote, rects = max(quotes, key=quote_score), None
+                candidates = []
+                for pi, paragraph in enumerate(paragraphs):
+                    for line in paragraph.splitlines():
+                        for part in line.split('\t'):
+                            if part.strip():
+                                candidate = excerpt(part)
+                                candidates.append((quote_score(candidate), pi, candidate))
+                if not candidates:
+                    self.items.append(section)
+                    return
+                _, paragraph_index, quote = max(candidates, key=lambda c: (c[0], -c[1]))
+                rects = None
             else:
-                quote, rects = anchor
+                quote, rects, paragraph_index = anchor
             annotation = {'label': '原文摘录', 'quote': quote,
                           'explanation': '摘自本节正文，可对照原文核对字词和标点。'}
             if rects:
                 annotation['rects'] = rects
-            section.update(annotation=annotation, checkpoint={
-                'kind': 'retype', 'prompt': '请逐字复现这段原文。',
-                'hint': '保留原文中的空格和标点。', 'target': quote})
+            section['annotation'] = annotation
+            phrase = choose_phrase(quote)
+            if phrase:
+                blank = {'answer': phrase, 'quote': quote, 'offset': quote.find(phrase)}
+                if paragraph_index is not None:
+                    blank['paragraph'] = paragraph_index
+                if rects and locate:
+                    found = locate(phrase, rects)
+                    if found:
+                        blank['rects'] = found
+                section['checkpoint'] = {
+                    'kind': 'blank',
+                    'prompt': '补全本节原文中的关键词。',
+                    'hint': '只填被遮住的原词，标点不用重输。',
+                    'blanks': [blank],
+                }
         else:
             section['paragraphs'] = [empty_notice] if empty_notice else []
         self.items.append(section)
@@ -531,6 +624,67 @@ def pdf_line(line, view):
     return text, (quote, None)
 
 
+class PdfLocator:
+    """Optional exact phrase boxes from Poppler's GLib reader.
+
+    pdftotext groups a Chinese line into one box, so a short phrase needs its own
+    lookup. This is only a hint: the box must sit inside the line already verified
+    by pdftotext and pdfinfo, otherwise the reader gets no PDF rectangle.
+    """
+
+    def __init__(self, cwd, geometry):
+        self.document = None
+        self.geometry = geometry
+        try:
+            import gi
+            for version in ('0.18', '0.16', '0.14'):
+                try:
+                    gi.require_version('Poppler', version)
+                    break
+                except (ImportError, ValueError):
+                    continue
+            else:
+                return
+            from gi.repository import Poppler
+            self.document = Poppler.Document.new_from_file(Path(cwd, 'input.pdf').as_uri(), None)
+        except Exception:
+            self.document = None
+
+    def rects(self, number, phrase, within):
+        if self.document is None or not within:
+            return None
+        try:
+            w, h, rotation = self.geometry[number]
+            if rotation:
+                return None
+            page = self.document.get_page(number - 1)
+            pw, ph = page.get_size()
+            if not (math.isclose(pw, w, rel_tol=1e-4, abs_tol=.05) and
+                    math.isclose(ph, h, rel_tol=1e-4, abs_tol=.05)):
+                return None
+            found = page.find_text(phrase) or []
+        except Exception:
+            return None
+        left = min(r[0] for r in within)
+        right = max(r[0] + r[2] for r in within)
+        top = min(r[1] for r in within)
+        bottom = max(r[1] + r[3] for r in within)
+        boxes = []
+        for rect in found:
+            x1, y1, x2, y2 = rect.x1, rect.y1, rect.x2, rect.y2
+            if not all(math.isfinite(v) for v in (x1, y1, x2, y2)) or not (0 <= x1 < x2 <= pw and 0 <= y1 < y2 <= ph):
+                continue
+            x, y = x1 / pw, (ph - y2) / ph
+            bw, bh = (x2 - x1) / pw, (y2 - y1) / ph
+            if not (0 <= x < x + bw <= 1 and 0 <= y < y + bh <= 1):
+                continue
+            cx, cy = x + bw / 2, y + bh / 2
+            if left - .015 <= cx <= right + .015 and top - .015 <= cy <= bottom + .015:
+                boxes.append([x, y, bw, bh])
+        # Ambiguous or multi-box matches stay unmarked rather than guessing.
+        return boxes if len(boxes) == 1 else None
+
+
 def analyse_pdf(cwd, geometry):
     data = poppler('pdftotext', ['-enc', 'UTF-8', '-bbox-layout', '-cropbox', 'input.pdf', '-'], cwd, 20 * MiB)
     # Strip only the fixed literal supplied by the utility; never load its external DTD.
@@ -539,9 +693,10 @@ def analyse_pdf(cwd, geometry):
     if len(pages) != len(geometry):
         raise DocumentError('PDF 页数与文本不一致，请重新导出。')
     sections = Sections()
+    locator = PdfLocator(cwd, geometry)
     for i, page in enumerate(pages, 1):
         view = viewport(page, geometry[i])
-        paragraphs, best, best_score = [], None, None
+        paragraphs, best, best_score, best_paragraph = [], None, None, None
         # Flow -> block -> line is Poppler's reading order, not a global Y/X sort.
         for block in page.iter(XHTML + 'block'):
             pieces = []
@@ -555,10 +710,12 @@ def analyse_pdf(cwd, geometry):
                 quality = quote_score(candidate[0])
                 score = (*quality[:2], candidate[1] is not None, *quality[2:])
                 if best_score is None or score > best_score:
-                    best, best_score = candidate, score
+                    best, best_score, best_paragraph = candidate, score, len(paragraphs)
             if pieces:
                 paragraphs.append(''.join(pieces))
-        sections.add(f'第 {i} 页', paragraphs, anchor=best,
+        anchor = (best[0], best[1], best_paragraph) if best else None
+        sections.add(f'第 {i} 页', paragraphs, anchor=anchor,
+                     locate=lambda phrase, within, number=i: locator.rects(number, phrase, within),
                      empty_notice='本页没有可提取的文字（可能是扫描图像或空白页）。请查看原页；未执行 OCR。')
     return sections.result()
 

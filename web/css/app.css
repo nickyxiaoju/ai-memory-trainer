@@ -28,7 +28,7 @@
   --shadow-l:0 18px 50px rgba(16,60,50,.16);
   --r-s:10px; --r-m:16px; --r-l:24px;
   --fs:18px;                 /* 基础字号，可被“大字模式”覆盖 */
-  --topbar-h:58px;           /* 顶栏高度：首页分屏的 calc(100vh - 顶栏) 与吸附留白都引用它 */
+  --topbar-h:58px;           /* 顶栏高度：首页分屏的上内边距、负边距与观察器留白都引用它 */
   --mono:"JetBrains Mono","Cascadia Code",Consolas,monospace;
 }
 
@@ -58,11 +58,68 @@ a{color:var(--blue-700)}
 .wrap{max-width:1000px;margin:0 auto;padding:0 20px 64px}
 .topbar{
   position:sticky;top:0;z-index:40;
-  /* 高度由 --topbar-h 定死：首页分屏按它做 100vh 减法，差几个像素就会让吸附点错位 */
+  /* 高度由 --topbar-h 定死：首页分屏的上内边距与负边距都引用它，差几个像素就会让吸附点错位 */
   height:var(--topbar-h);
-  backdrop-filter:saturate(1.2) blur(8px);
-  background:rgba(255,255,255,.78);
-  border-bottom:1px solid rgba(217,235,228,.9);
+  /* 顶栏不自带颜色：面纱是纯白半透明，颜色全部来自背后那一屏。
+     brightness 把深色抬进可读区——深绿首屏 #0f3d33 直接透上来会把文字压成黑底，
+     抬亮 1.8 倍再罩 45% 白纱得到 rgb(123,177,165)，是跟首屏同家族的中等绿；
+     而白底、--paper-2、内页纸色本来就接近 255，抬亮后仍顶满回纯白，
+     所以「白底=白、绿底=绿」两件事同时成立，且亮度调多低都不会让白底泛绿。
+     --ink 在中等绿上 5.68:1、在纯白上 13.73:1。
+     不支持 backdrop-filter 的浏览器退化成 45% 白纱，仍是一条可读的浅色带。 */
+  backdrop-filter:saturate(1.2) blur(8px) brightness(1.8);
+  background:rgba(255,255,255,.45);
+  border-bottom:1px solid rgba(23,50,44,.14);
+}
+/* 顶栏控件：浅绿毛玻璃（纱 = --green-200，深色文字）。
+   方向翻转的原因：暗通道白字那条路走到 brightness .50 就是终点（白底顶栏上 4.66:1），
+   用户还要「继续变浅一半 + 更多绿色」，而任何夹在旧深色与新浅色之间的中灰绿，
+   都是深字浅字一起不合格的死区——所以只能整块跳到浅绿玻璃这一侧，文字换成 --ink。
+   现在两个极端的芯片面：白底顶栏 rgb(229,246,239)（--ink 11:1）、深绿首屏
+   rgb(164,242,221)（--ink 8.8:1），徽标的 --green-700 字分别是 5.7 与 5.0:1。
+   毛玻璃靠 blur 半径 + saturate + 上缘内高光 + 深绿描边；徽标 9px、
+   主入口 14px、胶囊 24px，半径不同读出三层。选中态回到实色 --green-700 + 白字，
+   这是语义状态，不是装饰。 */
+.topbar-in>.badge{
+  background:rgba(189,232,214,.40);
+  backdrop-filter:blur(9px) brightness(1.4) saturate(1.4);
+  border-color:rgba(26,107,87,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55);
+  color:var(--green-700);
+}
+.topbar .navtab{
+  background:rgba(189,232,214,.40);
+  backdrop-filter:blur(14px) brightness(1.4) saturate(1.4);
+  border-color:rgba(26,107,87,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55);
+  color:var(--ink);
+}
+/* hover 必须加 :not(.on)：选中态（.navtab.on / .authchip.on）是深绿实底 + 白字，
+   普通 hover 的浅色纱特异性更高（多一个伪类），不加限定会把它盖回浅色，
+   白字掉在浅底上——「本地模式」在登录屏 hover 变白就是这个。 */
+.topbar .navtab:not(.on):hover{
+  background:rgba(189,232,214,.55);
+  border-color:rgba(26,107,87,.42);
+  color:var(--ink);
+}
+/* 当前所在屏的主入口：压成 --green-700 实色 + 白字 + 深绿环。用「实色 + 环形描边」
+   表示选中，不只靠颜色，键盘用户和大字模式也看得出来。 */
+.topbar .navtab.on{
+  background:rgba(26,107,87,.85);
+  border-color:rgba(255,255,255,.30);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 0 0 2px rgba(26,107,87,.30);
+  color:#fff;
+}
+.topbar .authchip{
+  background:rgba(189,232,214,.36);
+  backdrop-filter:blur(24px) brightness(1.35) saturate(1.3);
+  border-color:rgba(26,107,87,.20);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55);
+  color:var(--ink);
+}
+.topbar .authchip:not(.on):hover{
+  background:rgba(189,232,214,.50);
+  border-color:rgba(26,107,87,.38);
 }
 .topbar-in{height:100%;max-width:1000px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:12px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.3px;min-width:0;white-space:nowrap}
@@ -97,10 +154,11 @@ a{color:var(--blue-700)}
 .authchip{
   font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;
   padding:6px 12px;border-radius:999px;border:1px solid var(--line);
-  background:#fff;color:var(--ink-3);max-width:240px;overflow:hidden;text-overflow:ellipsis
+  background:#fff;color:var(--ink-2);max-width:240px;overflow:hidden;text-overflow:ellipsis
 }
-.authchip.local{background:#f4f6f5;color:var(--ink-3)}
-.authchip.on{background:var(--green-050);border-color:var(--green-200);color:var(--green-700)}
+/* 已登录态：浅色玻璃已经成了静息态，登录提示就得反着来——深绿实色 + 白字，
+   和 .navtab.on 同一套「选中」语言，避免浅色叠浅色看不出状态。 */
+.authchip.on{background:rgba(26,107,87,.85);border-color:rgba(255,255,255,.30);color:#fff}
 .authchip .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:1px}
 
 /* 窄屏降级顺序：先收徽标，再收站点名文字，保住两个主入口与登录态胶囊完整可见 */
@@ -174,6 +232,57 @@ textarea.inp{min-height:150px;resize:vertical;line-height:1.8;font-size:17px}
 }
 .chip:hover{border-color:var(--green-200);color:var(--green-700)}
 .chip.on{background:var(--green-050);border-color:var(--green-500);color:var(--green-700);font-weight:700}
+
+/* ---------- 6. 练习册 -------------------------------------------------- */
+.book-item{
+  display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;
+  font:inherit;color:var(--ink-2);background:#fff;border:1px solid var(--line);
+  border-radius:var(--r-s);padding:10px 14px;margin-top:8px;cursor:pointer;
+  transition:border-color .15s, background .15s
+}
+.book-item:hover{border-color:var(--green-200);background:var(--green-050)}
+.book-item:focus-visible{outline:3px solid var(--green-500);outline-offset:2px}
+/* 选中态：绿边 + 浅绿底 + 左侧深绿条，形状与颜色双重信号，不只看颜色 */
+.book-item.on,.book-item[aria-pressed="true"]{
+  border-color:var(--green-500);background:var(--green-050);
+  box-shadow:inset 4px 0 0 var(--green-700)
+}
+.book-tag{
+  flex:0 0 auto;align-self:center;font-size:11.5px;font-weight:800;letter-spacing:1px;
+  padding:2px 8px;border-radius:999px;color:var(--green-700);
+  background:var(--green-050);border:1px solid var(--green-200)
+}
+.book-title{
+  flex:0 0 190px;font-weight:700;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.book-prev{flex:1;font-size:13px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 列表高度封顶：条目多时在板块内滚动，不把整页撑破。
+   overscroll-behavior 掐掉滚动链，滚到列表尽头不会把整页带飞。 */
+.book-scroll{position:relative}
+#bookList{
+  max-height:360px;overflow-y:auto;overscroll-behavior:contain;
+  padding-right:6px;
+}
+#bookList::-webkit-scrollbar{width:8px}
+#bookList::-webkit-scrollbar-thumb{background:rgba(26,107,87,.25);border-radius:999px}
+#bookList::-webkit-scrollbar-thumb:hover{background:rgba(26,107,87,.45)}
+#bookList::-webkit-scrollbar-track{background:transparent}
+#bookList:focus-visible{outline:3px solid var(--green-500);outline-offset:2px;border-radius:10px}
+/* 底部渐隐 + 「下滑查看更多」：只有还有内容没滚出来时才显示（JS 按滚动位置开关）。
+   放在条目之上但不吃鼠标，滚到底自动消失，最后一条永远能完整读到。 */
+.book-fade{
+  position:absolute;left:0;right:0;bottom:0;height:48px;z-index:1;
+  display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;
+  font-size:12px;font-weight:700;color:var(--ink-3);letter-spacing:1px;
+  background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.96) 82%);
+  pointer-events:none;opacity:0;transition:opacity .2s ease
+}
+.book-fade.show{opacity:1}
+@media (max-width:759px){
+  .book-item{flex-wrap:wrap}
+  .book-title{flex:0 0 100%}
+}
 
 /* ---------- 6. 练习界面 ---------- */
 .meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}

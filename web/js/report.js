@@ -1,10 +1,12 @@
 /* ---------- H. 启动练习 / 报告 / 朗读 ---------------------------------- */
 
 async function startPractice() {
-  const raw = $('srcText').value.trim();
-  if (!raw) { toast('请先粘贴文本，或上传图片识别文字', 'warn'); return; }
+  // 练习册有选中项时直接用选中内容（不填文本框）；新输入/OCR 会清掉选中项，于是回退到文本框
+  const raw = ((typeof Book !== 'undefined' && Book.selectedText) || $('srcText').value).trim();
+  if (!raw) { toast('请先在练习册里选一篇，或粘贴文本 / 上传图片识别文字', 'warn'); return; }
   S.demoMode = $('demoMode').checked;
   saveCfg();
+  Store.addToBook(raw);   // 练过的原文收进本机练习册（不上传），下次可直接复用
 
   const segs = splitSegments(raw);
   if (!segs.length) { toast('文本太短，无法分段', 'warn'); return; }

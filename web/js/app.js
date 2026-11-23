@@ -289,14 +289,19 @@ const App = {
   }
 };
 
-/* ---------- 首页分屏指示器 ---------------------------------------------- */
+/* ---------- 首页分屏指示器与滚轮 -------------------------------------- */
 /**
- * 只管两件事：圆点点击跳转、按可见面积点亮当前屏。
- * 吸附本身交给 CSS 的 scroll-snap，这里绝不干预滚动，免得和吸附抢方向盘。
+ * 三件事：圆点点击跳转、按可见面积点亮当前屏、滚轮逐段翻页。
+ * 吸附的落点仍由 CSS scroll-snap 决定；只有滚轮是例外，理由见 initWheel。
  */
 const Landing = {
   io: null,
   ratios: new Map(),
+  pages: [],
+  cur: null,
+  wheelBusy: false,
+  wheelAcc: 0,
+  wheelAt: 0,
 
   /** 顶栏高度（CSS 变量是唯一事实来源，JS 只在读不到时兜底） */
   topbarH() {
@@ -320,9 +325,11 @@ const Landing = {
   },
 
   init() {
+    this.pages = $$('#screen-home .fs');
     $$('.fsdot').forEach(d => { d.onclick = () => this.jump(d.dataset.fs); });
     const hint = document.querySelector('.fs-hint');
     if (hint) hint.onclick = () => this.jump(hint.dataset.fs);
+    this.initWheel();
     if (!('IntersectionObserver' in window)) return;
     this.io = new IntersectionObserver((entries) => {
       entries.forEach(e => this.ratios.set(e.target, e.isIntersecting ? e.intersectionRatio : 0));
@@ -330,12 +337,75 @@ const Landing = {
       this.ratios.forEach((r, el) => { if (r > bestR) { bestR = r; best = el; } });
       // 取可见面积最大的一屏：大字模式下一屏可能占不满整屏，
       // 所以不能只认固定阈值。全部为 0 说明已经切到别的屏幕。
+      this.cur = best;
       this.mark(best ? best.id : '');
     }, {
       threshold: [0, 0.25, 0.55],
       rootMargin: '-' + this.topbarH() + 'px 0px 0px 0px'   // 被顶栏压住的那一条不算可见
     });
-    $$('#screen-home .fs').forEach(p => this.io.observe(p));
+    this.pages.forEach(p => this.io.observe(p));
+  },
+
+  /* ---------- 滚轮 ------------------------------------------------------ */
+  /**
+   * Chromium 在 scroll-snap-type:mandatory 下会吞掉滚轮输入：滚完一段就原地卡住，
+   * 要挪一下鼠标才恢复。所以这里把「一段」显式化——累计 deltaY 过阈值就跳到相邻段，
+   * 跳转动画期间吞掉所有滚轮余量，一次手势只走一段，不跟吸附抢方向盘。
+   * 本段内容超过一屏时完全不接管（连同 preventDefault 一起放开），
+   * 段内滚动留给大字模式、窄屏和展开后的技术路线。
+   */
+  initWheel() {
+    document.addEventListener('wheel', (e) => {
+      if (!document.documentElement.classList.contains('snap-home')) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;      // 捏合缩放等组合手势交回浏览器
+      const i = this.currentIndex();
+      if (i < 0) return;
+      if (!this.tallerThanViewport(this.pages[i])) {
+        e.preventDefault();                                // 吸附点由本函数驱动，不让浏览器半途吞输入
+        if (this.wheelBusy) return;
+        const now = Date.now();
+        // 隔了 180ms 以上就算换了一次手势：否则上一次没攒够的余量会留着，
+        // 下次随手一丁点delta 直接凑满阈值、凭空跳一整段。
+        if (now - this.wheelAt > 180) this.wheelAcc = 0;
+        this.wheelAt = now;
+        this.wheelAcc += e.deltaY * this.wheelUnit(e);
+        if (Math.abs(this.wheelAcc) < 26) return;          // 滤掉触控板的零碎抖动
+        const dir = this.wheelAcc > 0 ? 1 : -1;
+        const next = this.pages[i + dir];
+        this.wheelAcc = 0;
+        if (!next) return;                                 // 已经在首屏或末屏，没有待去的一段
+        this.wheelBusy = true;
+        this.jump(next.id);
+        setTimeout(() => { this.wheelBusy = false; }, prefersStill() ? 150 : 520);
+      }
+    }, { passive: false });
+  },
+
+  /** deltaMode：0 按像素、1 按行、2 按页，Firefox 走按行 */
+  wheelUnit(e) {
+    return e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+  },
+
+  /**
+   * 当前停靠的是第几段：按「段顶离吸附线最近」判定，同步且唯一。
+   * 吸附线现在就是视口顶（段背景要铺到顶栏背后，见 landing.css 第 1 节），
+   * 留 4px 容差，免得停在两段之间时相邻两段的距离打平。
+   * 不用观察器算出的可见面积最大者：那个值要等回调，滚轮连着来时是旧的，
+   * 拿旧下标去算相邻段就会跳错。观察器那份只管圆点高亮。
+   */
+  currentIndex() {
+    const line = 4;
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < this.pages.length; i++) {
+      const d = Math.abs(this.pages[i].getBoundingClientRect().top - line);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  },
+
+  /** 本段是否比视口还高：是的话段内还要滚，不能抢 */
+  tallerThanViewport(el) {
+    return el.getBoundingClientRect().height > window.innerHeight + 2;
   }
 };
 
@@ -359,6 +429,9 @@ const InputTabs = {
       if (panel) panel.hidden = !on;
     });
     if (focus !== false) this.tabs[k].focus();
+    // 练习册面板在「开始练习」之后可能多了新条目：每次切到它都重绘一遍，
+    // 否则刚练过的内容要等下一次搜索输入才出现。
+    if (this.tabs[k].id === 'tabBook') Book.render($('bookSearch').value);
     Store.savePrefs({ inputTab: this.tabs[k].id });
   },
   /** OCR 出来的文字落在文本框里，识别成功后必须把那页翻到眼前，否则用户只看到「识别成功」却看不见内容 */
@@ -395,6 +468,74 @@ const NoteSheet = {
     btn.onclick = () => {
       btn.setAttribute('aria-expanded', btn.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
     };
+  }
+};
+
+/* ---------- 练习册 ------------------------------------------------ */
+/**
+ * 内置示例（SAMPLES）排前、本机练过的原文排后，搜索按标题与正文一起过滤。
+ * 选中模型：点一条 = 选中（高亮保持，不跳页、不填文本框），再点同一条 = 取消；
+ * startPractice 优先用选中的内容，文本框里新输入/OCR 出的内容会把选中清掉。
+ * 列表每次搜索都整块重绘：条目少（≤63 条），重绘比重排 DOM 简单得多，
+ * 也不会留下「改了一行就忘了同步另一行」的隐藏状态。
+ */
+const Book = {
+  items: [],
+  selectedText: null,
+  /** 底部「下滑查看更多」渐隐只在该列表还有内容没滚出来时显示 */
+  updateScrollHint() {
+    const list = $('bookList'), fade = $('bookFade');
+    if (!list || !fade) return;
+    const more = list.scrollHeight - list.scrollTop - list.clientHeight > 6;
+    fade.classList.toggle('show', more);
+  },
+  render(filter) {
+    const q = (filter || '').trim().toLowerCase();
+    const built = [
+      { title: '岳阳楼记（名篇背诵）', text: SAMPLES.yyl, built: true },
+      { title: '英语课文（单词拼写）', text: SAMPLES.en, built: true },
+      { title: '长者认知训练（生活常识）', text: SAMPLES.old, built: true }
+    ];
+    const own = Store.book().map(e => ({ title: e.title, text: e.text, built: false }));
+    this.items = built.concat(own);
+    const shown = [];
+    this.items.forEach((e, i) => {
+      if (!q || (e.title + '\n' + e.text).toLowerCase().indexOf(q) > -1) shown.push(i);
+    });
+    $('bookCount').textContent = shown.length + ' 条';
+    if (!shown.length) {
+      $('bookList').innerHTML = '<p class="muted small" style="margin:10px 0 0">没有匹配的条目。</p>';
+      this.updateScrollHint();
+      return;
+    }
+    $('bookList').innerHTML = shown.map(i => {
+      const e = this.items[i];
+      const prev = e.text.replace(/\s+/g, ' ').slice(0,60);
+      const on = e.text === this.selectedText;
+      return '<button type="button" class="book-item' + (on ? ' on' : '') + '" data-i="' + i + '"' +
+        ' aria-pressed="' + (on ? 'true' : 'false') + '">' +
+        '<span class="book-tag">' + (e.built ? '内置' : '本机') + '</span>' +
+        '<span class="book-title">' + escapeHtml(e.title) + '</span>' +
+        '<span class="book-prev">' + escapeHtml(prev) + '</span>' +
+        '</button>';
+    }).join('');
+    $$('#bookList .book-item').forEach(btn => btn.onclick = () => {
+      const e = this.items[Number(btn.dataset.i)];
+      if (!e) return;
+      const wasOn = btn.getAttribute('aria-pressed') === 'true';
+      this.selectedText = wasOn ? null : e.text;
+      this.render($('bookSearch').value);   // 重绘以更新高亮，保留当前搜索词
+      updateSplitInfo();
+      toast(wasOn ? '已取消选中' : '已选中「' + e.title + '」，点「开始练习」即可');
+    });
+    this.updateScrollHint();
+  },
+  init() {
+    const search = $('bookSearch');
+    if (!search) return;
+    search.addEventListener('input', () => this.render(search.value));
+    $('bookList').addEventListener('scroll', () => this.updateScrollHint());
+    this.render('');
   }
 };
 
@@ -455,6 +596,8 @@ function bind() {
     go('setup');
     toast('已开启演示模式：使用本地算法，无需 API Key');
   };
+  // 准备页 → 个人中心的模型配置跳转入口
+  $('goModelCfg').addEventListener('click', e => { e.preventDefault(); go('profile'); });
 
   // 配置
   ['hfToken', 'groqKey', 'ocrModel', 'groqModel', 'chunk'].forEach(id => $(id).addEventListener('change', () => { saveCfg(); refreshKeyState(); updateSplitInfo(); }));
@@ -466,14 +609,31 @@ function bind() {
   });
   $('btnClearKeys').onclick = () => { Store.clearSecrets(); refreshKeyState(); toast('密钥已清除（只影响本机）'); };
   $('backHome').onclick = () => go('home');
-  $('srcText').addEventListener('input', () => updateSplitInfo());
+  $('srcText').addEventListener('input', () => {
+    if (typeof Book !== 'undefined' && Book.selectedText !== null) {
+      Book.selectedText = null;
+      Book.render($('bookSearch').value);   // 高亮要跟着取消，不能只在内存里清
+    }
+    updateSplitInfo();
+  });
 
   // 示例
   $$('.chip[data-sample]').forEach(btn => btn.onclick = () => {
     const k = btn.dataset.sample;
     $('srcText').value = k === 'clear' ? '' : SAMPLES[k];
+    if (typeof Book !== 'undefined') { Book.selectedText = null; Book.render($('bookSearch').value); }
     updateSplitInfo();
   });
+
+  // 粘贴文本 → 加入练习册（带标题）
+  $('btnAddBook').onclick = () => {
+    const text = $('srcText').value.trim();
+    if (!text) { toast('先粘贴或输入一段文字，再加入练习册', 'warn'); return; }
+    const title = $('textTitle').value.trim();
+    Store.addToBook(text, title || undefined);
+    Book.render($('bookSearch').value);
+    toast(title ? '已加入练习册：' + title : '已加入练习册（标题取正文首行）');
+  };
 
   // 图片 OCR
   let thumbUrl = '';
@@ -505,6 +665,7 @@ function bind() {
       const txt = await hfOcr(f, token, $('ocrModel').value.trim(), $('ocrEngine').value);
       const tidy = tidyOcrText(txt);
       $('srcText').value = $('srcText').value.trim() ? $('srcText').value.trim() + '\n' + tidy : tidy;
+      if (typeof Book !== 'undefined') { Book.selectedText = null; Book.render($('bookSearch').value); }   // 新识别的内容替代练习册选中项
       InputTabs.showText();          // 结果在「粘贴文本」页里，不把那页翻出来用户看不见
       $('ocrState').textContent = '识别成功：' + tidy.length + ' 字';
       updateSplitInfo();
@@ -612,7 +773,8 @@ function bind() {
 
 /** 分段预览，让用户在开始前对段数有预期 */
 function updateSplitInfo() {
-  const raw = $('srcText').value.trim();
+  // 练习册有选中项时按选中项估算；文本框里的新输入/OCR 结果会把选中项清掉，自然回退到文本框
+  const raw = ((typeof Book !== 'undefined' && Book.selectedText) || $('srcText').value).trim();
   if (!raw) { $('splitInfo').textContent = ''; return; }
   const n = splitSegments(raw).length;
   $('splitInfo').textContent = '当前文本约 ' + raw.length + ' 字 → 将切成 ' + n + ' 段练习，第 ' + Math.max(1, Math.round(n * 0.5)) + ' 段后触发闯关测验';
@@ -626,6 +788,7 @@ function updateSplitInfo() {
   loadCfg();
   S.demoMode = $('demoMode').checked;
   bind();
+  Book.init();
   // 首次加载停在首页时没人调用过 go()，分屏吸附的开关类必须自己补上，
   // 否则「刷新页面就没有吸附、点过一遍导航才有」这种不一致很难解释。
   document.documentElement.classList.toggle('snap-home', $('screen-home').classList.contains('on'));

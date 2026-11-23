@@ -173,9 +173,15 @@ function go(name) {
     d.classList.toggle('on', n <= (stepMap[name] || 0));
   });
   $$('.navtab').forEach(b => {
+    // 值必须等于各按钮的 data-goto：navLearn 是 "setup"，映射却写成 'learn'，
+    // 于是 setup/practice/report 三个屏都点不亮「开始学习」，只有 profile 同名才正常。
     const group = ({ setup: 'setup', practice: 'setup', report: 'setup', profile: 'profile' })[name] || '';
     b.classList.toggle('on', b.dataset.goto === group);
   });
+  // 登录态胶囊在「登录/注册」屏打开时也进入选中态（深绿 + 白字），
+  // 与两个主入口的切换行为对齐；已登录时它本来就常亮，条件里带上避免被这里关掉。
+  const chip = $('authChip');
+  if (chip) chip.classList.toggle('on', name === 'auth' || S.account.signedIn);
   document.documentElement.classList.toggle('snap-home', name === 'home');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

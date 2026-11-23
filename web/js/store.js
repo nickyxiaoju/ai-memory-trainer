@@ -7,6 +7,7 @@
  *   secrets  —— Hugging Face Token / Groq API Key，只有勾选「记住密钥」才写入，
  *               任何情况下都不进数据表、不进代码仓库、不进日志。
  *   history  —— 本机练习记录（未登录时是唯一的一份）。
+ *   book     —— 本机练习册（练过的原文，只在本机，绝不同步到云端）。
  *   桶名带账号后缀（::uid / ::anon），换账号不会看到别人的数据；
  *   Supabase 自己的会话 token 单独存在 memtrainer-auth::... 前缀下，由 SDK 管理。
  */
@@ -15,8 +16,10 @@ const Store = {
   BASE_PREFS: 'memtrainer_cfg',
   BASE_SECRETS: 'memtrainer_secrets',
   BASE_HISTORY: 'memtrainer_history',
+  BASE_BOOK: 'memtrainer_book',
   BASE_PROMPT: 'memtrainer_sync_prompt',   // 「同步提示已处理过」，避免每次登录重复弹窗
   HISTORY_LIMIT: 200,
+  BOOK_LIMIT: 60,
 
   key(base) { return base + '::' + (this.uid || 'anon'); },
   keyFor(base, uid) { return base + '::' + (uid || 'anon'); },
@@ -84,6 +87,40 @@ const Store = {
     if (!this.write(this.key(this.BASE_HISTORY), trimmed)) toast('本机存储写入失败，历史记录没能保存', 'warn');
   },
   unsynced() { return this.history().filter(r => !r.synced); },
+
+  /* ---------- 练习册 ---------- */
+  /**
+   * 本机练习册只收「开始练习」那一刻的 srcText，供下次直接复用。
+   * 刻意不同步到云端：全站的隐私承诺是云端只有统计与关键词明细、没有原文，
+   * 练习册若上传就等于破了这条线，所以它和密钥一样只住在本机。
+   */
+  book() {
+    const b = this.read(this.key(this.BASE_BOOK), []);
+    return Array.isArray(b) ? b : [];
+  },
+  saveBook(list) {
+    const trimmed = list.slice(0, this.BOOK_LIMIT);
+    if (!this.write(this.key(this.BASE_BOOK), trimmed)) toast('本机存储写入失败，练习册没能保存', 'warn');
+  },
+  /** 相同正文只保留一条并顶到最前；显式 title 优先，其次沿用已有标题，再退回首行前 24 字。
+      沿用已有标题是必须的：startPractice 自动收录时没有标题，若每次都拿首行覆盖，
+      用户用「加入练习册」起的标题会在第一次练习后被正文首行顶掉。 */
+  addToBook(text, title) {
+    const t = (text || '').trim();
+    if (!t) return;
+    const list = this.book();
+    const i = list.findIndex(e => e && e.text === t);
+    const given = String(title || '').trim();
+    const entry = {
+      id: (i > -1 && list[i].id) || ('b' + Date.now() + Math.random().toString(36).slice(2, 6)),
+      title: given || (i > -1 && list[i].title) || t.split(/\n/)[0].slice(0, 24),
+      text: t,
+      at: Date.now()
+    };
+    if (i > -1) list.splice(i, 1);
+    list.unshift(entry);
+    this.saveBook(list);
+  },
 
   /**
    * 把「未登录期间」记在本机的练习并入当前账号，

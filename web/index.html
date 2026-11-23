@@ -167,42 +167,18 @@
 <!-- ===================== 屏幕 2：配置与输入 ===================== -->
 <section class="screen" id="screen-setup" aria-label="准备练习内容">
   <h2 style="margin-top:22px">准备你的练习内容</h2>
-  <p class="sub">填好密钥（可跳过）、贴入或拍入文本，然后选择练习方式。</p>
-
-  <div class="card">
-    <h3>模型接口配置</h3>
-    <div class="grid2">
-      <div>
-        <label class="f" for="hfToken">Hugging Face Token（用于 OCR 图片识字）</label>
-        <input class="inp" id="hfToken" type="password" autocomplete="off" placeholder="hf_xxxxxxxxxxxxxxxxxxxx" />
-      </div>
-      <div>
-        <label class="f" for="groqKey">Groq API Key（用于智能挖空 / 出题）</label>
-        <input class="inp" id="groqKey" type="password" autocomplete="off" placeholder="gsk_xxxxxxxxxxxxxxxxxxxx" />
-      </div>
-    </div>
-    <div class="row" style="margin-top:12px">
-      <label class="check"><input type="checkbox" id="rememberKeys" /> 记住密钥（仅保存在本机浏览器 localStorage）</label>
-      <label class="check"><input type="checkbox" id="demoMode" /> 演示模式：不调用外部 API，改用本地算法挖空/出题</label>
-    </div>
-    <p class="muted" style="margin:10px 0 0">
-      安全说明：本站没有自建服务器，这两个密钥只在你浏览器里直接发往官方接口，不会经过我们，也不会写进代码仓库或任何数据表。
-      公共电脑或演示机上请勿勾选「记住密钥」，练习结束点「清除密钥」（它同时清空输入框和本机存储）。账号密码由 Supabase 认证服务保管，与这里两个密钥无关。
-    </p>
-    <div class="row" style="margin-top:12px">
-      <button class="btn sm ghost" id="btnClearKeys">清除密钥</button>
-      <span class="muted" id="keyState">状态：未配置</span>
-    </div>
-  </div>
+  <p class="sub">贴入或拍入文本，然后选择练习方式。</p>
+  <p class="muted" style="margin:-4px 0 2px">想接入自己的模型（Hugging Face / Groq 密钥与演示模式）？<a href="#" id="goModelCfg">去「个人中心」配置 →</a></p>
 
   <div class="card card-folder">
-    <div class="folder-tabs" role="tablist" aria-label="练习内容的输入方式">
-      <button type="button" class="ftab" id="tabOcr" role="tab" aria-controls="panel-ocr" aria-selected="true" tabindex="0">拍照识字</button>
+    <div class="folder-tabs" role="tablist" aria-label="练习内容的来源">
+      <button type="button" class="ftab" id="tabBook" role="tab" aria-controls="panel-book" aria-selected="true" tabindex="0">练习册</button>
+      <button type="button" class="ftab" id="tabOcr" role="tab" aria-controls="panel-ocr" aria-selected="false" tabindex="-1">拍照识字</button>
       <button type="button" class="ftab" id="tabText" role="tab" aria-controls="panel-text" aria-selected="false" tabindex="-1">粘贴文本</button>
     </div>
 
     <!-- 面板用 hidden 属性切换，不用 display:none 类：焦点与读屏行为都跟着原生语义走 -->
-    <div class="fpanel" id="panel-ocr" role="tabpanel" aria-labelledby="tabOcr">
+    <div class="fpanel" id="panel-ocr" role="tabpanel" aria-labelledby="tabOcr" hidden>
       <div class="grid2">
         <div>
           <label class="f" for="ocrEngine">OCR 引擎</label>
@@ -226,13 +202,25 @@
     </div>
 
     <div class="fpanel" id="panel-text" role="tabpanel" aria-labelledby="tabText" hidden>
+      <label class="f" for="textTitle">标题（加入练习册时用它命名，留空则取正文首行）</label>
+      <input class="inp" id="textTitle" type="text" maxlength="24" placeholder="例如：岳阳楼记（名篇背诵）" style="margin-bottom:10px" />
       <textarea class="inp" id="srcText" placeholder="把要背诵的课文、单词短文、康复训练语句粘贴到这里……&#10;&#10;示例：&#10;庆历四年春，滕子京谪守巴陵郡。越明年，政通人和，百废具兴，乃重修岳阳楼。"></textarea>
       <div class="row" style="margin-top:10px">
-        <span class="muted">试试示例：</span>
-        <button class="chip" data-sample="yyl">岳阳楼记（名篇背诵）</button>
-        <button class="chip" data-sample="en">英语课文（单词拼写）</button>
-        <button class="chip" data-sample="old">长者认知训练（生活常识）</button>
+        <button class="btn sm" id="btnAddBook">加入练习册</button>
         <button class="chip" data-sample="clear">清空</button>
+      </div>
+    </div>
+
+    <!-- 练习册面板：内置示例 + 本机练过的原文，只存在这台浏览器，不上传 -->
+    <div class="fpanel" id="panel-book" role="tabpanel" aria-labelledby="tabBook">
+      <p class="muted">内置示例与你在这台浏览器里练过的内容都收在这里。点选一条即可直接开始练习，再点一次取消；在「粘贴文本」里新输入或识别出的内容会替代这里的选中项。练习册只存在本机，不会上传到任何服务器。</p>
+      <div class="row" style="margin-top:10px">
+        <input class="inp" id="bookSearch" type="search" placeholder="搜索标题或正文…" style="max-width:420px" aria-label="搜索练习册" />
+        <span class="muted small" id="bookCount"></span>
+      </div>
+      <div class="book-scroll">
+        <div id="bookList" tabindex="0" role="region" aria-label="练习册列表"></div>
+        <div class="book-fade" id="bookFade" aria-hidden="true">▾ 下滑查看更多</div>
       </div>
     </div>
   </div>
@@ -439,6 +427,32 @@
         <button class="btn sm ghost" id="detailClose">收起</button>
         <button class="btn sm warn" id="btnDeleteSession">删除这条记录</button>
         <span class="muted small" id="detailState"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>模型接口配置</h3>
+      <div class="grid2">
+        <div>
+          <label class="f" for="hfToken">Hugging Face Token（用于 OCR 图片识字）</label>
+          <input class="inp" id="hfToken" type="password" autocomplete="off" placeholder="hf_xxxxxxxxxxxxxxxxxxxx" />
+        </div>
+        <div>
+          <label class="f" for="groqKey">Groq API Key（用于智能挖空 / 出题）</label>
+          <input class="inp" id="groqKey" type="password" autocomplete="off" placeholder="gsk_xxxxxxxxxxxxxxxxxxxx" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <label class="check"><input type="checkbox" id="rememberKeys" /> 记住密钥（仅保存在本机浏览器 localStorage）</label>
+        <label class="check"><input type="checkbox" id="demoMode" /> 演示模式：不调用外部 API，改用本地算法挖空/出题</label>
+      </div>
+      <p class="muted" style="margin:10px 0 0">
+        安全说明：本站没有自建服务器，这两个密钥只在你浏览器里直接发往官方接口，不会经过我们，也不会写进代码仓库或任何数据表。
+        公共电脑或演示机上请勿勾选「记住密钥」，练习结束点「清除密钥」（它同时清空输入框和本机存储）。账号密码由 Supabase 认证服务保管，与这里两个密钥无关。
+      </p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn sm ghost" id="btnClearKeys">清除密钥</button>
+        <span class="muted" id="keyState">状态：未配置</span>
       </div>
     </div>
 

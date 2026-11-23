@@ -46,7 +46,10 @@ h1,h2,h3,h4{font-weight:700}
 .t-page{font-family:var(--hand);line-height:2.15}
 
 /* ---------- 2. 文件夹标签页 ------------------------------------------ */
-.card-folder{position:relative;margin-top:12px;padding-top:22px}
+/* 标签条绝对定位、向上凸出 var(--tab-h)-1px，卡片上边距必须把它让出来：
+   否则上方只有一段 15px 底边距的副标题时，标签会压进文字里（副标题底到标签顶 -9px）。
+   上边距 = 凸出量 + 6px 余量，标签顶与上方文字之间始终留 ~20px。 */
+.card-folder{position:relative;margin-top:calc(var(--tab-h) + 6px);padding-top:22px}
 .folder-tabs{
   position:absolute;left:20px;top:calc(1px - var(--tab-h));   /* 底边正好压过卡片那 1px 上边框 */
   height:var(--tab-h);display:flex;gap:4px

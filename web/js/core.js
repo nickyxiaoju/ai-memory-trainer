@@ -161,27 +161,39 @@ const AppConfig = {
 };
 
 /* ---------- B. 屏幕导航 / 配置持久化 ------------------------------------ */
-const SCREENS = ['screen-home', 'screen-setup', 'screen-practice', 'screen-report', 'screen-auth', 'screen-profile'];
+const SCREENS = ['screen-workbench', 'screen-legacy', 'screen-setup', 'screen-practice', 'screen-report', 'screen-auth', 'screen-profile'];
 function go(name) {
   SCREENS.forEach(s => {
     const el = $(s);
     if (el) el.classList.toggle('on', s === 'screen-' + name);
   });
-  const stepMap = { home: 1, setup: 2, practice: 3, report: 3, auth: 0, profile: 0 };
+  const stepMap = { workbench: 1, legacy: 1, setup: 2, practice: 3, report: 3, auth: 0, profile: 0 };
   $$('.stepdot').forEach(d => {
     const n = Number(d.dataset.step);
     d.classList.toggle('on', n <= (stepMap[name] || 0));
   });
   $$('.navtab').forEach(b => {
-    // 值必须等于各按钮的 data-goto：navLearn 是 "setup"，映射却写成 'learn'，
-    // 于是 setup/practice/report 三个屏都点不亮「开始学习」，只有 profile 同名才正常。
-    const group = ({ setup: 'setup', practice: 'setup', report: 'setup', profile: 'profile' })[name] || '';
+    // workbench 和 legacy 都映射到 workbench 导航按钮；setup/practice/report 映射到 practice（专项训练）
+    const group = ({ workbench: 'workbench', legacy: 'workbench', setup: 'practice', practice: 'practice', report: 'practice', profile: 'profile' })[name] || '';
     b.classList.toggle('on', b.dataset.goto === group);
   });
   // 登录态胶囊在「登录/注册」屏打开时也进入选中态（深绿 + 白字），
   // 与两个主入口的切换行为对齐；已登录时它本来就常亮，条件里带上避免被这里关掉。
   const chip = $('authChip');
   if (chip) chip.classList.toggle('on', name === 'auth' || S.account.signedIn);
-  document.documentElement.classList.toggle('snap-home', name === 'home');
+  // snap-legacy 只在旧产品介绍页（有分屏吸附）时启用，工作台是普通滚动页
+  document.documentElement.classList.toggle('snap-legacy', name === 'legacy');
+  // 复习面板与调试时钟是全页单例，靠 re-parent 在工作台与练习屏右栏之间搬移；
+  // 搬完再刷新，两屏显示的必然是同一份队列状态。不 await：翻页不能被一次读库拖住。
+  if (typeof Review !== 'undefined' && (name === 'workbench' || name === 'practice')) {
+    Review.mount(name);
+    if (typeof Workbench !== 'undefined') {
+      if (name === 'workbench') Workbench.loadDocs().then(() => Workbench.renderDocs());
+      Workbench.refreshReview();
+    }
+  }
+  // 三栏比原来的单列宽，练习屏把容器放宽；其余屏保持 1000px 版式不动
+  const wrap = document.querySelector('.wrap');
+  if (wrap) wrap.classList.toggle('is-wide', name === 'practice');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

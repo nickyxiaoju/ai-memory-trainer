@@ -6,12 +6,27 @@ async function startPractice() {
   if (!raw) { toast('请先在练习册里选一篇，或粘贴文本 / 上传图片识别文字', 'warn'); return; }
   S.demoMode = $('demoMode').checked;
   saveCfg();
+
+  // 练习册里选中的是内置讲义时，它就该是一本真教材：走 openDoc 才有 docId 与检查点。
+  // 落到下面这条通用路径的话 S.docId 会被清空，写完空也排不进复习计划（阶段 4 验收缺口）。
+  if (typeof Book !== 'undefined' && Book.selectedText && Book.selectedBuiltTitle) {
+    try {
+      await Workbench.openDoc(await Workbench.resolveDocument(Book.selectedText, Book.selectedBuiltTitle));
+    } catch (e) {
+      toast('内置讲义打不开：' + (e && e.message ? e.message : e), 'err');
+    }
+    return;
+  }
+
   Store.addToBook(raw);   // 练过的原文收进本机练习册（不上传），下次可直接复用
 
   const segs = splitSegments(raw);
   if (!segs.length) { toast('文本太短，无法分段', 'warn'); return; }
 
   // 只重置练习态字段；S.account 由 auth.js 独占，「再练一遍」不得清空账号状态
+  // 专项训练不属于任何一本教材：清掉 docId，否则写完空会把记录挂到上一本教材的检查点上
+  S.docId = null;
+  S.checkpoints = null;
   S.segments = segs.map(t => ({ text: t, chars: Array.from(t), keywords: null, blanks: [], hintsUsed: 0 }));
   S.idx = 0;
   S.startedAt = Date.now();

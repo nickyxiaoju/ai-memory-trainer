@@ -55,7 +55,7 @@ const App = {
       updateSplitInfo();
       App.renderChip();
       // 只复位账号态：正在默写的段落、计时、进度全部保留，不打断练习
-      if ($('screen-profile').classList.contains('on') || $('screen-auth').classList.contains('on')) go('home');
+      if ($('screen-profile').classList.contains('on') || $('screen-auth').classList.contains('on')) go('workbench');
       return;
     }
     if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') { App.renderChip(); return; }
@@ -325,7 +325,7 @@ const Landing = {
   },
 
   init() {
-    this.pages = $$('#screen-home .fs');
+    this.pages = $$('#screen-legacy .fs');
     $$('.fsdot').forEach(d => { d.onclick = () => this.jump(d.dataset.fs); });
     const hint = document.querySelector('.fs-hint');
     if (hint) hint.onclick = () => this.jump(hint.dataset.fs);
@@ -356,7 +356,7 @@ const Landing = {
    */
   initWheel() {
     document.addEventListener('wheel', (e) => {
-      if (!document.documentElement.classList.contains('snap-home')) return;
+      if (!document.documentElement.classList.contains('snap-legacy')) return;
       if (e.ctrlKey || e.altKey || e.metaKey) return;      // 捏合缩放等组合手势交回浏览器
       const i = this.currentIndex();
       if (i < 0) return;
@@ -482,6 +482,12 @@ const NoteSheet = {
 const Book = {
   items: [],
   selectedText: null,
+  selectedBuiltTitle: null,   // 选中的是「内置」条目时记下标题：startPractice 据此认出它其实是一本教材
+  /** 选中/取消练习册条目：正文与内置标题一次写，不会出现一个更新、一个留在上一次的 */
+  select(text, builtTitle) {
+    this.selectedText = text;
+    this.selectedBuiltTitle = text == null ? null : (builtTitle || null);
+  },
   /** 底部「下滑查看更多」渐隐只在该列表还有内容没滚出来时显示 */
   updateScrollHint() {
     const list = $('bookList'), fade = $('bookFade');
@@ -523,7 +529,7 @@ const Book = {
       const e = this.items[Number(btn.dataset.i)];
       if (!e) return;
       const wasOn = btn.getAttribute('aria-pressed') === 'true';
-      this.selectedText = wasOn ? null : e.text;
+      this.select(wasOn ? null : e.text, e.built ? e.title : null);
       this.render($('bookSearch').value);   // 重绘以更新高亮，保留当前搜索词
       updateSplitInfo();
       toast(wasOn ? '已取消选中' : '已选中「' + e.title + '」，点「开始练习」即可');
@@ -577,18 +583,323 @@ const Fonts = {
   }
 };
 
+/* ---------- 工作台 ------------------------------------------------ */
+/**
+ * 工作台是新的默认首页，两栏布局：
+ *   左栏「学习新知识」：四种来源卡片 + 我的教材列表 + 继续学习按钮
+ *   右栏「复习今日」：间隔复习队列，一次一张卡片
+ *
+ * 阶段 2：打通粘贴文本和内置讲义入口，IndexedDB 存储教材。
+ */
+const Workbench = {
+  docs: [],  // 当前教材列表
+
+  async init() {
+    // UI 绑定不依赖 IndexedDB：即使 DB 打不开，四个卡片与粘贴弹窗也必须能点，
+    // 否则会把「生成教材」的入口一起拖没（init 的 await 链一抛错，后面的绑定就不执行了）。
+    this.bindPasteModal();
+    this.renderProgress();
+    await this.loadDocs();
+    this.renderDocs();
+    await this.refreshReview();
+  },
+
+  /** 从 IndexedDB 加载教材列表 */
+  async loadDocs() {
+    try {
+      this.docs = await DB.listDocuments();
+      // 按创建时间倒序
+      this.docs.sort((a, b) => b.createdAt - a.createdAt);
+    } catch (e) {
+      console.warn('加载教材失败:', e);
+      this.docs = [];
+    }
+  },
+
+  /** 左栏：渲染我的教材列表 */
+  renderDocs() {
+    const box = $('wbDocsList');
+    if (!box) return;
+    if (!this.docs.length) {
+      box.innerHTML = '<p class="muted small" style="margin:12px 0">还没有教材，点击上方卡片开始添加。</p>';
+      return;
+    }
+    box.innerHTML = this.docs.map(doc => {
+      const segCount = doc.segments ? doc.segments.length : 0;
+      const date = new Date(doc.createdAt).toLocaleDateString('zh-CN');
+      return `<button type="button" class="wb-doc-item" data-docid="${doc.docId}">
+        <div class="wb-doc-title">${escapeHtml(doc.title)}</div>
+        <div class="wb-doc-meta">${segCount} 段 · ${date} · ${doc.source === 'builtin' ? '内置' : '自创'}</div>
+      </button>`;
+    }).join('');
+    // 绑定点击事件
+    box.querySelectorAll('.wb-doc-item').forEach(btn => {
+      btn.onclick = () => this.openDoc(btn.dataset.docid);
+    });
+  },
+
+  /**
+   * 把一段原文落到一本真教材上，返回 docId：已有就用已有的，没有就按同一套规则生成。
+   * 内置讲义第一次从练习册进来时走这里——没有 docId，onSegmentDone 在源头就 return，
+   * 「完成检查点」写得再对也排不进复习计划，这就是内置与自定义表现不一致的地方。
+   */
+  async resolveDocument(raw, title) {
+    if (!this.docs.length) await this.loadDocs();
+    const flat = s => String(s || '').replace(/\s+/g, '');
+    const want = flat(raw);
+    let hit = this.docs.find(d => d.title === title) ||
+              this.docs.find(d => flat((d.segments || []).map(x => x.text).join('')) === want);
+    if (hit) return hit.docId;
+    hit = await this.generateDocument(raw, title || String(raw).trim().slice(0, 10), 'builtin');
+    await DB.saveDocument(hit);
+    await this.loadDocs();
+    this.renderDocs();
+    return hit.docId;
+  },
+
+  /** 打开教材进入学习 */
+  async openDoc(docId) {
+    let doc = null;
+    try {
+      doc = await DB.getDocument(docId);
+    } catch (e) {
+      toast('打开教材失败：' + (e && e.message ? e.message : e), 'err');
+      return;
+    }
+    if (!doc || !Array.isArray(doc.segments) || !doc.segments.length) {
+      toast('教材数据为空或已损坏，请重新生成', 'warn');
+      return;
+    }
+    // 阶段 3：段落 id 与检查点对齐，onSegmentDone 靠 segmentId 找回本段的检查点
+    let cps = [];
+    try {
+      cps = await Review.ensureCheckpoints(doc);
+    } catch (e) {
+      console.warn('检查点生成失败', e);
+    }
+    S.docId = doc.docId;
+    S.checkpoints = cps;
+    S.segments = doc.segments.map((seg, i) => {
+      const segId = seg.id || (doc.docId + '-s' + i);
+      const own = cps.filter(c => c.segmentId === segId).map(c => c.answer);
+      return {
+        id: segId,
+        text: seg.text,
+        chars: Array.from(seg.text),
+        // 直接用检查点的答案当关键词：练习页挖的空和复习题考的空就是同一个词
+        keywords: own.length ? own : null,
+        blanks: [],
+        hintsUsed: 0
+      };
+    });
+    S.idx = 0;
+    S.startedAt = Date.now();
+    S.errTotal = 0;
+    S.hintUsed = 0;
+    S.quizTry = 0;
+    S.quizDone = true;  // 跳过闯关
+    S.quizResult = 'none';
+    S.inPractice = true;
+    S.checkpointAt = Infinity;
+    go('practice');
+    $('passage').innerHTML = '<div class="t-loading" role="status">正在准备第一段…</div>';
+    $('progLabel').textContent = '共 ' + S.segments.length + ' 段';
+    $('kwTags').innerHTML = '';
+    $('blankTip').className = 'tip info';
+    $('blankTip').textContent = '第一段正在准备，稍等一两秒。';
+    clearInterval(S.timerId);
+    S.timerId = setInterval(() => { $('stTime').textContent = mmss(Date.now() - S.startedAt); }, 1000);
+    $('stTime').textContent = '00:00';
+    $('stTyped').textContent = '0';
+    $('stErr').textContent = '0';
+    $('hintLeft').textContent = HINT_BUDGET;
+    await loadSegment(0);
+    toast('共 ' + doc.segments.length + ' 段，把灰框里的空凭记忆填上');
+  },
+
+  /** 左栏：当前进度（阶段 2 显示空态） */
+  renderProgress() {
+    const box = $('wbProgress');
+    if (!box) return;
+    box.hidden = true;
+  },
+
+  /** 右栏：复习今日（阶段 3 接艾宾浩斯队列） */
+  async refreshReview() {
+    if (typeof Review === 'undefined') return;
+    try {
+      await Review.refresh();
+    } catch (e) {
+      // 队列读不出来时退回空态，不能让右栏停在上一批数据上，也不能卡住工作台
+      console.warn('复习队列加载失败', e);
+      const empty = $('wbReviewEmpty');
+      const card = $('wbReviewCard');
+      if (card) card.hidden = true;
+      if (empty) empty.style.display = '';
+    }
+  },
+
+  /** 绑定粘贴文本浮层 */
+  bindPasteModal() {
+    const veil = $('pasteVeil');
+    if (!veil) return;
+    const textarea = $('pasteText');
+    const info = $('pasteInfo');
+    const titleInput = $('pasteTitleInput');
+
+    // 打开浮层
+    $('wbSrcPaste').onclick = () => {
+      textarea.value = '';
+      titleInput.value = '';
+      info.textContent = '已输入 0 字';
+      veil.classList.add('on');
+      textarea.focus();
+    };
+
+    // 实时字数统计
+    textarea.oninput = () => {
+      info.textContent = '已输入 ' + textarea.value.length + ' 字';
+    };
+
+    // 取消
+    $('pasteCancel').onclick = () => {
+      veil.classList.remove('on');
+    };
+
+    // 确认生成
+    $('pasteConfirm').onclick = async () => {
+      const text = textarea.value.trim();
+      if (!text) { toast('请先粘贴文字', 'warn'); return; }
+      if (text.length < 20) { toast('文字太短，至少 20 字', 'warn'); return; }
+      const title = titleInput.value.trim() || text.trim().slice(0, 10);
+
+      veil.classList.remove('on');
+      showVeil('正在生成教材…', '系统正在按 40-80 字切段，请稍候。');
+      
+      try {
+        const doc = await this.generateDocument(text, title, 'paste');
+        await DB.saveDocument(doc);
+        await this.loadDocs();
+        this.renderDocs();
+        hideVeil();
+        toast('教材已生成：' + doc.segments.length + ' 段，点击即可学习');
+      } catch (e) {
+        hideVeil();
+        toast('生成失败：' + (e.message || e), 'err');
+        console.error(e);
+      }
+    };
+
+    // 内置讲义
+    $('wbSrcBuilt').onclick = async () => {
+      showVeil('正在加载内置讲义…', '系统正在生成检查点，请稍候。');
+      try {
+        // 加载三节内置讲义
+        const builtins = [
+          { title: '岳阳楼记（名篇背诵）', text: SAMPLES.yyl },
+          { title: '英语课文（单词拼写）', text: SAMPLES.en },
+          { title: '长者认知训练（生活常识）', text: SAMPLES.old }
+        ];
+        for (const item of builtins) {
+          // 检查是否已存在
+          const existing = this.docs.find(d => d.title === item.title && d.source === 'builtin');
+          if (existing) continue;
+          const doc = await this.generateDocument(item.text, item.title, 'builtin');
+          await DB.saveDocument(doc);
+        }
+        await this.loadDocs();
+        this.renderDocs();
+        hideVeil();
+        // 播完种就进第一节的学习界面。以前只 toast 一句「内置讲义已加载」就停在首页：
+        // 想学只能绕道练习册，而那条路没有 docId，检查点永远排不进复习计划。
+        const first = this.docs.find(d => d.source === 'builtin' && d.title === builtins[0].title);
+        if (first) await this.openDoc(first.docId);
+        else toast('内置讲义已加载，请在「我的教材」里选择');
+      } catch (e) {
+        hideVeil();
+        toast('加载失败：' + (e.message || e), 'err');
+        console.error(e);
+      }
+    };
+
+    // OCR 和 我的教材 暂时跳转到旧流程
+    $('wbSrcOcr').onclick = () => { go('setup'); if (typeof InputTabs !== 'undefined') { const i = InputTabs.tabs.findIndex(t => t.id === 'tabOcr'); if (i > -1) InputTabs.select(i); } };
+    $('wbSrcBook').onclick = () => { go('setup'); if (typeof InputTabs !== 'undefined') { const i = InputTabs.tabs.findIndex(t => t.id === 'tabBook'); if (i > -1) InputTabs.select(i); } };
+
+    // ESC 关闭浮层
+    veil.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { veil.classList.remove('on'); }
+      if (e.key === 'Tab') trapTab(e, veil);
+    });
+
+    // 临时调试：只拨快时钟，不动任何记录。演示前删掉这一段与 index.html 的 .wb-review-debug
+    [['wbShiftDay', () => Review.shiftOneDay()], ['wbClockReset', () => Review.resetClock()]].forEach(pair => {
+      const btn = $(pair[0]);
+      if (!btn) return;
+      btn.onclick = async () => {
+        btn.setAttribute('aria-disabled', 'true');
+        try {
+          await pair[1]();
+        } catch (e) {
+          toast('调试时钟操作失败：' + (e && e.message ? e.message : e), 'err');
+        } finally {
+          btn.removeAttribute('aria-disabled');
+        }
+      };
+    });
+  },
+
+  /**
+   * 生成教材：切段
+   * 复用现有 splitSegments() 逻辑，关键词提取交给练习流程的 loadSegment()
+   */
+  async generateDocument(text, title, source) {
+    const docId = 'doc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const segments = splitSegments(text);
+    
+    if (!segments.length) throw new Error('文本太短，无法分段');
+    
+    const segObjs = segments.map((segText, i) => ({
+      id: docId + '_seg_' + i,
+      text: segText,
+      order: i
+    }));
+
+    // 阶段 3：检查点与段落一起落库，复习队列才不用每次练习时重新推导
+    const doc = {
+      docId: docId,
+      title: title,
+      source: source,  // 'paste' | 'builtin' | 'ocr'
+      segments: segObjs,
+      checkpoints: [],
+      createdAt: Date.now()
+    };
+    doc.checkpoints = Review.buildCheckpoints(doc);
+    return doc;
+  }
+};
+
 /* ---------- 事件绑定 -------------------------------------------------- */
 function bind() {
-  // 顶栏两个主入口 + 登录态胶囊
-  $('navLearn').onclick = () => App.goPractice();
+  // 顶栏三个主入口 + 登录态胶囊
+  $('navWorkbench').onclick = () => go('workbench');
+  $('navPractice').onclick = () => go('setup');
   $('navProfile').onclick = () => { go('profile'); Profile.refresh(); };
   $('authChip').onclick = () => {
     if (S.account.signedIn) { go('profile'); Profile.refresh(); } else { go('auth'); App.renderAuthMode(); }
   };
 
-  // 首页
-  $('goSetup').onclick = () => { go('setup'); };
-  $('goSetupDemo').onclick = () => {
+  // 四个来源卡片的绑定统一在 Workbench.bindPasteModal 里做。
+  // 这里绝不能再绑一次：重复 onclick 赋值会因执行顺序互相覆盖，是「点了没反应 / 打开的不是弹窗」的根源。
+
+  // 工作台：继续学习 & 底部入口
+  if ($('wbContinue')) $('wbContinue').onclick = () => { go('setup'); };
+  if ($('wbGoLegacy')) $('wbGoLegacy').onclick = () => go('legacy');
+  if ($('backToWorkbench')) $('backToWorkbench').onclick = () => go('workbench');
+
+  // 旧首页（产品介绍）按钮
+  if ($('goSetupLegacy')) $('goSetupLegacy').onclick = () => { go('setup'); };
+  if ($('goSetupDemoLegacy')) $('goSetupDemoLegacy').onclick = () => {
     $('demoMode').checked = true;
     S.demoMode = true;
     saveCfg();
@@ -608,10 +919,10 @@ function bind() {
     else saveCfg();
   });
   $('btnClearKeys').onclick = () => { Store.clearSecrets(); refreshKeyState(); toast('密钥已清除（只影响本机）'); };
-  $('backHome').onclick = () => go('home');
+  $('backHome').onclick = () => go('workbench');
   $('srcText').addEventListener('input', () => {
     if (typeof Book !== 'undefined' && Book.selectedText !== null) {
-      Book.selectedText = null;
+      Book.select(null);
       Book.render($('bookSearch').value);   // 高亮要跟着取消，不能只在内存里清
     }
     updateSplitInfo();
@@ -621,7 +932,7 @@ function bind() {
   $$('.chip[data-sample]').forEach(btn => btn.onclick = () => {
     const k = btn.dataset.sample;
     $('srcText').value = k === 'clear' ? '' : SAMPLES[k];
-    if (typeof Book !== 'undefined') { Book.selectedText = null; Book.render($('bookSearch').value); }
+    if (typeof Book !== 'undefined') { Book.select(null); Book.render($('bookSearch').value); }
     updateSplitInfo();
   });
 
@@ -665,7 +976,7 @@ function bind() {
       const txt = await hfOcr(f, token, $('ocrModel').value.trim(), $('ocrEngine').value);
       const tidy = tidyOcrText(txt);
       $('srcText').value = $('srcText').value.trim() ? $('srcText').value.trim() + '\n' + tidy : tidy;
-      if (typeof Book !== 'undefined') { Book.selectedText = null; Book.render($('bookSearch').value); }   // 新识别的内容替代练习册选中项
+      if (typeof Book !== 'undefined') { Book.select(null); Book.render($('bookSearch').value); }   // 新识别的内容替代练习册选中项
       InputTabs.showText();          // 结果在「粘贴文本」页里，不把那页翻出来用户看不见
       $('ocrState').textContent = '识别成功：' + tidy.length + ' 字';
       updateSplitInfo();
@@ -709,7 +1020,7 @@ function bind() {
   // 报告
   $('btnAgain').onclick = () => startPractice();
   $('btnNewText').onclick = () => go('setup');
-  $('btnHome2').onclick = () => go('home');
+  $('btnHome2').onclick = () => go('workbench');
 
   // 账号页
   $('tabEmail').onclick = () => App.setAuthTab('email');
@@ -719,7 +1030,7 @@ function bind() {
   $('btnForgot').onclick = () => App.doForgot();
   $('btnSendOtp').onclick = () => App.doSendOtp();
   $('btnVerifyOtp').onclick = () => App.doVerifyOtp();
-  $('authBack').onclick = () => go('home');
+  $('authBack').onclick = () => go('workbench');
   const submitEmailForm = (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
@@ -755,6 +1066,7 @@ function bind() {
   // 课本化界面（阶段 3）
   InputTabs.init();
   NoteSheet.init();
+  if (typeof P3 !== 'undefined') P3.init();   // 三栏壳的抽屉按钮（宽屏时按钮由 CSS 隐藏）
   Fonts.init();
 
   // 全局快捷键：Esc 退出练习。请求中的 Loading 遮罩与同步面板仍然吞掉 Esc（那时打断会造成脏状态），
@@ -762,6 +1074,8 @@ function bind() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if ($('veil').classList.contains('on') || $('migrateVeil').classList.contains('on')) return;
+    // 窄屏抽屉开着时 Esc 先关抽屉，不能顺手把整场练习退掉
+    if (typeof P3 !== 'undefined' && P3.isOpen()) { P3.close(); return; }
     if ($('screen-practice').classList.contains('on')) $('btnQuit').click();
   });
   // 闯关浮层是模态的：Tab 圈在浮层内，关掉之后焦点由 closeQuizVeil 还回来
@@ -789,10 +1103,10 @@ function updateSplitInfo() {
   S.demoMode = $('demoMode').checked;
   bind();
   Book.init();
-  // 首次加载停在首页时没人调用过 go()，分屏吸附的开关类必须自己补上，
-  // 否则「刷新页面就没有吸附、点过一遍导航才有」这种不一致很难解释。
-  document.documentElement.classList.toggle('snap-home', $('screen-home').classList.contains('on'));
+  // 工作台是默认首页，不使用分屏吸附；旧产品介绍页（#screen-legacy）才用吸附
+  document.documentElement.classList.remove('snap-legacy');
   Landing.init();
+  if (typeof Workbench !== 'undefined') Workbench.init();
   refreshKeyState();
   App.renderAuthMode();
   App.renderChip();

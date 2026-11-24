@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AI 沉浸式记忆练习助手 · 阿里云天池 AI 算法大赛参赛作品</title>
 <meta name="description" content="面向学生记忆学习与老年人脑力训练的 AI 沉浸式记忆练习工具。OCR 取文 + 大模型智能挖空 + 逐空实时判定 + 阶段性闯关测验 + 练习报告。" />
-<link rel="stylesheet" href="css/app.css" />
-<link rel="stylesheet" href="css/landing.css" />
-<link rel="stylesheet" href="css/textbook.css" />
+<link rel="stylesheet" href="css/app.css?v=20261124d" />
+<link rel="stylesheet" href="css/landing.css?v=20261124d" />
+<link rel="stylesheet" href="css/textbook.css?v=20261124d" />
 <!-- 霞鹜文楷（SIL OFL 1.1，免费商用）：media=print 让它先以非阻塞方式下载，
      到手后再切回 all。CDN 取不到只影响字形，功能与可读性由系统楷体/黑体兜底。 -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -24,18 +24,157 @@
     <span class="badge">阿里云天池 AI 算法大赛</span>
     <span class="spacer"></span>
     <nav class="mainnav" aria-label="主入口">
-      <button type="button" class="navtab" id="navLearn" data-goto="setup">开始学习</button>
+      <button type="button" class="navtab" id="navWorkbench" data-goto="workbench">工作台</button>
+      <button type="button" class="navtab" id="navPractice" data-goto="practice">专项训练</button>
       <button type="button" class="navtab" id="navProfile" data-goto="profile">个人中心</button>
     </nav>
     <button type="button" class="authchip local" id="authChip" title="账号状态"><span class="dot"></span>本地模式</button>
   </div>
 </div>
 
-<!-- ===================== 屏幕 1：首页（分屏吸附） ===================== -->
-<!-- 首屏必须放在 .wrap 之外：分屏要整屏铺满底色，而 .wrap 有 1000px 上限与左右内边距 -->
-<section class="screen on" id="screen-home" aria-label="产品介绍">
+<!-- ===================== 屏幕 1：工作台 ===================== -->
+<section class="screen on" id="screen-workbench" aria-label="学习工作台">
+  <div class="workbench">
+    <!-- 左栏：学习新知识 -->
+    <div class="wb-col wb-learn">
+      <h2 class="wb-title">学习新知识</h2>
+      <p class="wb-desc">选择一种方式开始，或继续之前的学习</p>
 
-  <!-- 首屏：纯色深绿实底 + 一句话主张 -->
+      <div class="wb-sources">
+        <button type="button" class="wb-card" id="wbSrcBuilt">
+          <div class="wb-card-icon">📖</div>
+          <div class="wb-card-body">
+            <h3>内置讲义</h3>
+            <p>经典课文与示例文本</p>
+          </div>
+        </button>
+        <button type="button" class="wb-card" id="wbSrcOcr">
+          <div class="wb-card-icon">📷</div>
+          <div class="wb-card-body">
+            <h3>拍照识字</h3>
+            <p>课本、讲义拍一张照</p>
+          </div>
+        </button>
+        <button type="button" class="wb-card" id="wbSrcPaste">
+          <div class="wb-card-icon">📝</div>
+          <div class="wb-card-body">
+            <h3>粘贴文本</h3>
+            <p>直接输入或粘贴内容</p>
+          </div>
+        </button>
+        <button type="button" class="wb-card" id="wbSrcBook">
+          <div class="wb-card-icon">📚</div>
+          <div class="wb-card-body">
+            <h3>我的教材</h3>
+            <p>已保存的学习内容</p>
+          </div>
+        </button>
+      </div>
+
+      <div class="wb-docs" id="wbDocsSection">
+        <h3>我的教材</h3>
+        <div class="wb-docs-list" id="wbDocsList">
+          <p class="muted small" style="margin:12px 0">还没有教材，点击上方卡片开始添加。</p>
+        </div>
+      </div>
+
+      <div class="wb-progress" id="wbProgress" hidden>
+        <h3>当前进度</h3>
+        <div class="wb-prog-card">
+          <div class="wb-prog-title" id="wbProgTitle">—</div>
+          <div class="wb-prog-meta">
+            <span id="wbProgSeg">0 / 0 段</span>
+            <span class="wb-prog-acc" id="wbProgAcc">正确率 —</span>
+          </div>
+          <div class="bar" role="progressbar"><i id="wbProgBar"></i></div>
+          <button type="button" class="btn" id="wbContinue">继续学习</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右栏：复习今日 -->
+    <div class="wb-col wb-review">
+      <h2 class="wb-title">复习今日</h2>
+      <p class="wb-desc">根据遗忘曲线，今天需要复习的内容</p>
+
+      <!-- 调试时钟：单例节点，进练习屏时被搬到练习屏顶部工具条（要求「顶部保留」） -->
+      <div id="debugHostWb">
+        <div class="wb-review-debug" id="debugBar">
+          <span class="wb-clock-label" id="wbClockLabel">调试时钟 未拨快</span>
+          <button type="button" class="btn ghost sm" id="wbShiftDay">模拟过一天</button>
+          <button type="button" class="btn ghost sm" id="wbClockReset">时钟归零</button>
+        </div>
+      </div>
+
+      <!-- 复习面板宿主：#reviewPanel 在工作台与练习屏右栏之间整体搬移。
+           绝不复制第二份——复制会让 wbReviewCard 等 id 重复，$() 只会命中第一个，两栏一起错乱 -->
+      <div id="reviewHostWb">
+        <div id="reviewPanel">
+          <div class="wb-review-queue" id="wbReviewQueue">
+            <div class="wb-review-empty" id="wbReviewEmpty">
+              <p>暂无待复习内容</p>
+              <p class="muted small" id="wbReviewEmptyHint">完成学习后，系统会自动安排复习计划</p>
+            </div>
+            <div class="wb-review-card" id="wbReviewCard" hidden>
+              <div class="wb-review-head">
+                <span class="wb-review-prog" id="wbReviewProg">0 / 0</span>
+                <span class="wb-review-due" id="wbReviewDue">今日待复习</span>
+              </div>
+              <div class="wb-review-bar" role="progressbar" aria-label="今日复习进度"><i id="wbReviewBar"></i></div>
+              <div class="wb-review-body" id="wbReviewBody" aria-live="polite" tabindex="-1">
+                <!-- 复习内容动态渲染 -->
+              </div>
+              <div class="wb-review-actions" id="wbReviewActions"></div>
+            </div>
+          </div>
+
+          <div class="wb-review-stats" id="wbReviewStats" hidden>
+            <div class="wb-stat">
+              <b id="wbStatDue">0</b>
+              <span>待复习</span>
+            </div>
+            <div class="wb-stat">
+              <b id="wbStatDone">0</b>
+              <span>已完成</span>
+            </div>
+            <div class="wb-stat">
+              <b id="wbStatStreak">0</b>
+              <span>累计排期</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部快捷入口 -->
+  <div class="wb-footer">
+    <button type="button" class="btn ghost sm" id="wbGoLegacy">查看产品介绍</button>
+    <a class="btn ghost sm" href="/folio/index.html">页间 Folio · 主动阅读工作台</a>
+  </div>
+</section>
+
+<!-- ===================== 浮层：粘贴讲义内容（自定义模态弹窗） ===================== -->
+<div class="veil" id="pasteVeil" role="dialog" aria-modal="true" aria-labelledby="pasteModalTitle">
+  <div class="sheet" style="max-width:560px">
+    <h3 id="pasteModalTitle" style="margin:0 0 12px">粘贴讲义内容</h3>
+    <p class="muted" style="margin:0 0 14px">把要学习的课文、讲义或笔记粘贴到下面，系统会自动按 40-80 字切段生成教材。</p>
+    <label class="f" for="pasteTitleInput">教材标题（可选，留空则自动取前 10 个字）</label>
+    <input class="inp" id="pasteTitleInput" type="text" maxlength="40" placeholder="例如：第四次实验报告" style="margin-bottom:14px" />
+    <label class="f" for="pasteText">讲义正文</label>
+    <textarea class="inp" id="pasteText" spellcheck="false"
+      placeholder="在此粘贴课文、讲义或笔记内容..."
+      style="margin-bottom:10px;height:300px;min-height:120px;font-family:inherit;line-height:1.6;resize:vertical"></textarea>
+    <p class="muted small" id="pasteInfo" style="margin:0 0 16px">已输入 0 字 · 支持鼠标右键粘贴、Ctrl+V 与拖拽</p>
+    <div class="row" style="justify-content:flex-end;gap:10px">
+      <button class="btn ghost" id="pasteCancel" type="button">取消</button>
+      <button class="btn" id="pasteConfirm" type="button">生成教材</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 屏幕 1b：产品介绍（旧首页） ===================== -->
+<section class="screen" id="screen-legacy" aria-label="产品介绍">
   <div class="fs fs-hero" id="fs-hero">
     <div class="fs-in">
       <div class="fs-badges">
@@ -46,15 +185,13 @@
       <h1><span>把任何一段文字，</span><span>变成会挖空的默写训练</span></h1>
       <p class="fs-claim">拍照取文、AI 挑关键词挖空、逐空实时判定、中途闯关出题，一条流水线跑完；学生用它背课本，长辈用它练脑力。</p>
       <div class="fs-cta">
-        <button class="btn big" id="goSetup">开始学习</button>
-        <button class="btn ghost" id="goSetupDemo">演示模式体验（无需 API Key）</button>
+        <button class="btn big" id="goSetupLegacy">开始学习</button>
+        <button class="btn ghost" id="goSetupDemoLegacy">演示模式体验（无需 API Key）</button>
       </div>
       <p class="fs-privacy">未登录时全程在这台浏览器内完成，不产生任何服务器数据；登录后只有练习统计与关键词明细会同步到<b>你自己的</b> Supabase 账号。文本与密钥只发往官方推理接口（Hugging Face / Groq），本站没有服务端密钥。</p>
-      <div class="fs-hint" aria-hidden="true" data-fs="fs-ocr"><span>向下滚动，逐屏看六项能力</span><i class="fs-arrow"></i></div>
     </div>
   </div>
 
-  <!-- 六屏能力介绍：浅灰与白交替 -->
   <div class="fs" id="fs-ocr">
     <div class="fs-in">
       <p class="fs-kicker">输入</p>
@@ -97,9 +234,6 @@
       <h2>适老化与无障碍</h2>
       <p class="fs-claim">字更大、可读、可听，键盘能完成全部操作。</p>
       <p class="fs-desc">大字模式、慢速朗读、高对比的红绿反馈、屏幕阅读器标签与实时播报都在流程之内；分屏导航的圆点是可聚焦的按钮，当前屏用拉长的胶囊形状区分，而不是只靠颜色，色觉障碍的用户也看得出位置。</p>
-      <div class="fs-cta" style="margin-top:26px">
-        <a class="btn" href="/folio/index.html" style="text-decoration:none;display:inline-block">页间 Folio · 主动阅读工作台</a>
-      </div>
     </div>
   </div>
 
@@ -112,7 +246,6 @@
     </div>
   </div>
 
-  <!-- 页底次要信息：技术路线与为什么值得做，默认收起 -->
   <div class="fs fs-end" id="fs-end">
     <div class="fs-in">
       <p class="fs-kicker">补充</p>
@@ -151,19 +284,11 @@
       </footer>
     </div>
   </div>
-</section>
 
-<!-- 分屏圆点指示器：只有首页在场时可见（.snap-home 控制） -->
-<nav class="fs-dots" aria-label="分屏导航">
-  <button type="button" class="fsdot" data-fs="fs-hero" aria-label="第 1 屏：产品主张"></button>
-  <button type="button" class="fsdot" data-fs="fs-ocr" aria-label="第 2 屏：拍照即可练 OCR"></button>
-  <button type="button" class="fsdot" data-fs="fs-blanks" aria-label="第 3 屏：AI 智能挖空"></button>
-  <button type="button" class="fsdot" data-fs="fs-compare" aria-label="第 4 屏：逐空实时判定"></button>
-  <button type="button" class="fsdot" data-fs="fs-quiz" aria-label="第 5 屏：阶段性闯关测验"></button>
-  <button type="button" class="fsdot" data-fs="fs-access" aria-label="第 6 屏：适老化与无障碍"></button>
-  <button type="button" class="fsdot" data-fs="fs-report" aria-label="第 7 屏：练习报告"></button>
-  <button type="button" class="fsdot" data-fs="fs-end" aria-label="第 8 屏：技术路线与为什么值得做"></button>
-</nav>
+  <div class="row" style="justify-content:center;padding:40px 0">
+    <button class="btn ghost" id="backToWorkbench">返回工作台</button>
+  </div>
+</section>
 
 <div class="wrap">
 
@@ -472,8 +597,25 @@
 </section>
 
 <!-- ===================== 屏幕 3：练习界面 ===================== -->
-<section class="screen" id="screen-practice" aria-label="默写练习">
-  <div class="card" style="margin-top:22px">
+<section class="screen p3" id="screen-practice" aria-label="默写练习">
+  <!-- 窄屏才有这条工具条：宽屏三栏都在，按钮由 CSS 隐藏 -->
+  <div class="p3-topbar">
+    <button type="button" class="btn ghost sm" id="pTocToggle" aria-expanded="false" aria-controls="pTocCol">目录</button>
+    <span class="p3-top-tip" id="p3TopTip">共 0 段</span>
+    <span class="spacer"></span>
+    <button type="button" class="btn ghost sm" id="pReviewToggle" aria-expanded="false" aria-controls="pReviewCol">复习 <b id="pReviewCount">0</b></button>
+  </div>
+  <div id="debugHostPractice"></div>
+
+  <div class="p3-grid">
+    <aside class="p3-col p3-toc" id="pTocCol" aria-label="教材目录">
+      <h3 class="p3-col-title">教材目录</h3>
+      <p class="p3-col-sub" id="pTocSub">共 0 段</p>
+      <ol class="p3-toc-list" id="pToc"></ol>
+    </aside>
+
+    <div class="p3-col p3-main">
+      <div class="card">
     <div class="meta">
       <span class="badge blue" id="progLabel">第 1 / 1 段</span>
       <span class="spacer"></span>
@@ -510,7 +652,17 @@
       </div>
     </div>
     <p class="muted" style="margin-top:14px">统计：本段已写对 <b id="stTyped">0</b> 个空 · 累计写错 <b id="stErr">0</b> 次 · 用时 <b id="stTime">00:00</b></p>
+      </div>
+    </div>
+
+    <aside class="p3-col p3-review" id="pReviewCol" aria-label="复习今日">
+      <h3 class="p3-col-title">复习今日</h3>
+      <div id="reviewHostPractice"></div>
+    </aside>
   </div>
+
+  <!-- 窄屏抽屉的遮罩：点任意处关掉， Escape 也关 -->
+  <div class="p3-scrim" id="p3Scrim" hidden></div>
 
   <div class="page-no" aria-hidden="true">第 3 页 · 共 4 页</div>
 </section>
@@ -591,22 +743,24 @@
 <div id="toast" aria-live="polite" aria-atomic="true"></div>
 
 <!-- Supabase SDK（本地副本，classic script，暴露全局 supabase） -->
-<script src="vendor/supabase.js"></script>
+<script src="vendor/supabase.js?v=20261124d"></script>
 <!-- 真实配置：Project URL / anon key，不入库；缺失时自动降级为本地模式 -->
-<script src="js/config.js"></script>
-<script src="js/shared.js"></script>
-<script src="js/core.js"></script>
-<script src="js/store.js"></script>
-<script src="js/api.js"></script>
-<script src="js/text.js"></script>
-<script src="js/keywords.js"></script>
-<script src="js/quiz.js"></script>
-<script src="js/practice.js"></script>
-<script src="js/report.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/cloud.js"></script>
-<script src="js/history.js"></script>
-<script src="js/profile.js"></script>
-<script src="js/app.js"></script>
+<script src="js/config.js?v=20261124d"></script>
+<script src="js/shared.js?v=20261124d"></script>
+<script src="js/core.js?v=20261124d"></script>
+<script src="js/store.js?v=20261124d"></script>
+<script src="js/db.js?v=20261124d"></script>
+<script src="js/api.js?v=20261124d"></script>
+<script src="js/text.js?v=20261124d"></script>
+<script src="js/keywords.js?v=20261124d"></script>
+<script src="js/quiz.js?v=20261124d"></script>
+<script src="js/practice.js?v=20261124d"></script>
+<script src="js/report.js?v=20261124d"></script>
+<script src="js/auth.js?v=20261124d"></script>
+<script src="js/cloud.js?v=20261124d"></script>
+<script src="js/history.js?v=20261124d"></script>
+<script src="js/profile.js?v=20261124d"></script>
+<script src="js/review.js?v=20261124d"></script>
+<script src="js/app.js?v=20261124d"></script>
 </body>
 </html>

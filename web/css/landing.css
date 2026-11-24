@@ -1,13 +1,20 @@
 /* ==========================================================================
-   landing.css —— 阶段 2 独占：首页首屏 + 分屏吸附 + 圆点指示器 + 页底次要信息
-   只作用于 #screen-home 与 .fs-dots，不碰准备/默写/报告三页的滚动行为。
-   设计取向：首屏纯色实底（深绿），介绍区浅灰与白交替，文字对比度按底色重算。
+   landing.css —— 阶段 2 独占：旧产品介绍页（#screen-legacy）+ 分屏吸附 + 圆点指示器
+   以及新工作台（#screen-workbench）的两栏布局。
+   不碰准备/默写/报告三页的滚动行为。
+   设计取向：工作台用普通滚动，旧介绍页保留分屏吸附。
    ========================================================================== */
 
 :root{
   --paper-2:#f3f6f5;        /* 介绍区浅灰底，与白色交替分区 */
   --hero-fg:#d8f3e7;        /* 深绿底上的主张副句（约 9:1） */
   --hero-dim:rgba(255,255,255,.72);  /* 深绿底上的次要说明（≥4.6:1） */
+  /* 下面两个是工作台与复习卡一直在引用、此前却从未定义过的变量：
+     未定义时 color 只能退回继承色、border 退回 currentcolor，
+     所以卡片描边是深墨绿、说明文字没有弱层次。三栏复用同一组件，这次一并补上。
+     --muted 在白底 4.68:1，够 12px 小字的 AA 线。 */
+  --muted:#5c7a72;
+  --strong-line:#c8ddd6;    /* 比 --line 深一档：可点击的卡片边框要看得见 */
 }
 
 /* ---------- 1. 文档级吸附：只有首页在场时才启用 ------------------------- */
@@ -20,10 +27,8 @@ html.snap-home{
 }
 /* 顶栏在文档流里占了 58px，首页不整体往上提这一条，首屏底色就永远盖不到它背后，
    页头那一条会一直露出 body 的纸色，看起来像一道没染色的白边。 */
-html.snap-home #screen-home{margin-top:calc(var(--topbar-h) * -1)}
-/* 停在首页时 .wrap 里全是隐藏屏幕，它那 64px 底部内边距会在最后一屏后面
-   拖出一条既滚不到也甩不掉的空白，必须一起收掉。 */
-html.snap-home .wrap{padding-bottom:0}
+html.snap-legacy #screen-legacy{margin-top:calc(var(--topbar-h) * -1)}
+html.snap-legacy .wrap{padding-bottom:0}
 
 /* ---------- 2. 每一屏 --------------------------------------------------- */
 .fs{
@@ -144,7 +149,7 @@ details.minor[open] .minor-body{grid-template-rows:1fr}
 .fs-end .foot{margin:28px 0 0;text-align:left;max-width:720px}
 
 /* ---------- 5. 右侧圆点指示器 ------------------------------------------ */
-/* 放在 #screen-home 之外：.screen 的入场动画带 transform，
+/* 放在 #screen-legacy 之外：.screen 的入场动画带 transform，
    fixed 元素若在那个子树里会在动画期间被位移。 */
 .fs-dots{
   position:fixed;right:22px;top:50%;transform:translateY(-50%);z-index:35;
@@ -152,7 +157,7 @@ details.minor[open] .minor-body{grid-template-rows:1fr}
   margin:0;padding:0;list-style:none;
   opacity:0;visibility:hidden;transition:opacity .2s ease
 }
-html.snap-home .fs-dots{opacity:1;visibility:visible}
+html.snap-legacy .fs-dots{opacity:1;visibility:visible}
 .fsdot{
   appearance:none;width:11px;height:11px;padding:0;border:0;border-radius:999px;
   cursor:pointer;background:rgba(15,61,51,.30);
@@ -176,7 +181,7 @@ html.snap-home .fs-dots{opacity:1;visibility:visible}
 
 /* ---------- 7. 减少动效 ------------------------------------------------ */
 @media (prefers-reduced-motion:reduce){
-  html.snap-home{scroll-behavior:auto}
+  html.snap-legacy{scroll-behavior:auto}
   .fs-arrow{animation:none}
   .minor-body{transition:none}
   .fsdot{transition:none}
@@ -185,4 +190,279 @@ html.snap-home .fs-dots{opacity:1;visibility:visible}
   /* 呼吸停掉但两层渐变都留在原位，首屏仍是深绿而不是少一层的塌色 */
   .fs-hero::before{opacity:.6}
   .fs-hero::after{opacity:.6}
+}
+
+/* ==========================================================================
+   工作台布局 —— 两栏：左「学习新知识」右「复习今日」
+   只在 #screen-workbench 内生效，不碰旧首页的吸附排版。
+   ========================================================================== */
+
+/* ---------- 1. 工作台容器 ------------------------------------------------ */
+#screen-workbench{
+  min-height:calc(100vh - var(--topbar-h));
+  padding:calc(var(--topbar-h) + 32px) 24px 48px;
+  background:var(--paper-2);
+}
+.workbench{
+  max-width:1100px;margin:0 auto;
+  display:grid;grid-template-columns:1fr 1fr;gap:28px;
+  align-items:start;
+}
+.wb-col{
+  background:#fff;border-radius:16px;padding:28px 24px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+.wb-title{font-size:22px;margin:0 0 6px;color:var(--ink);letter-spacing:.3px}
+.wb-desc{font-size:14px;color:var(--muted);margin:0 0 22px}
+
+/* ---------- 2. 左栏：四种来源卡片 ---------------------------------------- */
+.wb-sources{
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;
+}
+.wb-card{
+  appearance:none;border:1px solid var(--strong-line);border-radius:12px;
+  background:#fff;padding:18px 16px;cursor:pointer;text-align:left;
+  display:flex;align-items:flex-start;gap:14px;
+  transition:border-color .15s ease,box-shadow .15s ease;
+  font-family:inherit;
+}
+.wb-card:hover{border-color:var(--green-500);box-shadow:0 2px 8px rgba(15,61,51,.08)}
+.wb-card:focus-visible{outline:2px solid var(--green-500);outline-offset:2px}
+.wb-card-icon{font-size:28px;line-height:1;flex-shrink:0}
+.wb-card-body{flex:1;min-width:0}
+.wb-card-body h3{font-size:15px;margin:0 0 4px;color:var(--ink)}
+.wb-card-body p{font-size:13px;color:var(--muted);margin:0;line-height:1.4}
+
+/* ---------- 3. 左栏：当前进度 -------------------------------------------- */
+.wb-docs{margin-top:28px}
+.wb-docs h3{font-size:16px;margin:0 0 12px;color:var(--ink)}
+.wb-docs-list{
+  display:flex;flex-direction:column;gap:10px;
+  max-height:320px;overflow-y:auto;
+}
+.wb-doc-item{
+  appearance:none;border:1px solid var(--strong-line);border-radius:10px;
+  background:#fff;padding:14px 16px;cursor:pointer;text-align:left;
+  transition:border-color .15s ease,box-shadow .15s ease;
+  font-family:inherit;width:100%;
+}
+.wb-doc-item:hover{border-color:var(--green-500);box-shadow:0 2px 8px rgba(15,61,51,.08)}
+.wb-doc-item:focus-visible{outline:2px solid var(--green-500);outline-offset:2px}
+.wb-doc-title{font-size:15px;font-weight:600;color:var(--ink);margin:0 0 4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wb-doc-meta{font-size:12px;color:var(--muted);margin:0}
+
+.wb-progress{margin-top:28px}
+.wb-progress h3{font-size:16px;margin:0 0 12px;color:var(--ink)}
+.wb-prog-card{
+  border:1px solid var(--strong-line);border-radius:12px;padding:18px 16px;
+  background:var(--paper-2);
+}
+.wb-prog-title{font-size:15px;font-weight:600;color:var(--ink);margin:0 0 8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wb-prog-meta{
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:13px;color:var(--muted);margin-bottom:12px;
+}
+.wb-prog-acc{color:var(--green-700);font-weight:600}
+.wb-progress .bar{height:6px;margin-bottom:16px}
+.wb-progress .btn{width:100%}
+
+/* ---------- 4. 右栏：复习队列 -------------------------------------------- */
+.wb-review-queue{min-height:200px}
+.wb-review-empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:200px;text-align:center;color:var(--muted);
+}
+.wb-review-empty p{margin:0 0 6px;font-size:15px}
+.wb-review-empty .muted{font-size:13px}
+.wb-review-card{
+  border:1px solid var(--strong-line);border-radius:12px;padding:20px 18px;
+  background:var(--paper-2);
+}
+.wb-review-head{
+  display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;
+}
+.wb-review-prog{font-size:13px;color:var(--muted);font-weight:600}
+.wb-review-due{font-size:12px;color:var(--green-700);font-weight:600}
+.wb-review-body{
+  font-size:16px;line-height:1.8;color:var(--ink);margin-bottom:18px;
+  min-height:80px;
+}
+.wb-review-actions{display:flex;justify-content:flex-end;gap:10px}
+
+/* 复习卡内的进度条：已完成/总数，随每次「记得/忘了」即时推进 */
+.wb-review-bar{height:6px;background:var(--line);border-radius:999px;overflow:hidden;margin:10px 0 16px}
+.wb-review-bar>i{display:block;height:100%;width:0;background:var(--green-500);border-radius:999px;transition:width .25s ease}
+.wb-review-meta{font-size:12.5px;color:var(--muted);margin:0 0 10px}
+.wb-review-q{font-size:17px;line-height:1.9;margin:0 0 8px}
+.wb-review-src{font-size:12.5px;color:var(--muted);margin:0}
+.wb-review-a{
+  margin:14px 0 0;padding:12px 14px;font-size:17px;font-weight:700;line-height:1.7;
+  background:var(--green-050);border:1px solid var(--green-200);border-radius:8px;color:var(--green-700)
+}
+.wb-review-done{margin:0;font-size:15.5px;font-weight:600;color:var(--green-700)}
+.wb-review-debug{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:16px}
+.wb-clock-label{font-size:12px;color:var(--muted);margin-right:auto}
+.wb-review-debug .btn[aria-disabled="true"]{opacity:.6}
+
+/* ---------- 5. 右栏：统计 ------------------------------------------------ */
+.wb-review-stats{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px;
+}
+.wb-stat{
+  text-align:center;padding:14px 8px;
+  border:1px solid var(--strong-line);border-radius:10px;background:#fff;
+}
+.wb-stat b{display:block;font-size:22px;color:var(--green-700);margin-bottom:2px}
+.wb-stat span{font-size:12px;color:var(--muted)}
+
+/* ---------- 6. 底部快捷入口 ---------------------------------------------- */
+.wb-footer{
+  max-width:1100px;margin:24px auto 0;
+  display:flex;justify-content:center;gap:14px;
+}
+
+/* ---------- 7. 窄屏：工作台改单栏 ---------------------------------------- */
+@media (max-width:759px){
+  #screen-workbench{padding:calc(var(--topbar-h) + 20px) 14px 36px}
+  .workbench{grid-template-columns:1fr;gap:18px}
+  .wb-sources{grid-template-columns:1fr}
+  .wb-col{padding:22px 16px}
+  .wb-review-stats{grid-template-columns:repeat(3,1fr);gap:8px}
+  .wb-stat{padding:10px 6px}
+  .wb-stat b{font-size:18px}
+  .wb-docs-list{max-height:240px}
+}
+
+/* ---------- 8. 粘贴文本浮层 ---------------------------------------------- */
+#pasteVeil .sheet{max-width:560px}
+#pasteVeil textarea{
+  width:100%;min-height:200px;padding:12px;border:1px solid var(--strong-line);
+  border-radius:8px;font-family:inherit;font-size:14px;line-height:1.6;resize:vertical;
+}
+#pasteVeil textarea:focus{outline:2px solid var(--green-500);outline-offset:-1px}
+
+/* ==========================================================================
+   阶段 4 —— 学习界面三栏：左「教材目录」中「默写」右「复习今日」
+   只作用于 #screen-practice（.p3），不改工作台、旧首页与准备/报告页。
+   ≥1000px 三栏并排；<1000px 收成单栏，左目录与右复习改为两个抽屉。
+   ========================================================================== */
+
+/* 练习屏独占加宽容器：三栏里复习栏固定 300px、目录 212px，
+   沿用 .wrap 的 1000px 会把中栏压到 400px 以下，一行放不下 20 个字。 */
+.wrap.is-wide{max-width:1320px}
+
+.p3-grid{
+  display:grid;
+  grid-template-columns:212px minmax(0,1fr) 300px;
+  gap:20px;
+  align-items:start;
+}
+/* min-width:0：grid 子项默认 min-content 兜底，长句原文会把中栏顶宽、整页横向溢出 */
+.p3-main{min-width:0}
+
+.p3-toc,.p3-review{
+  background:#fff;border:1px solid var(--line);border-radius:var(--r-l);
+  padding:16px 14px;
+  /* 吸在顶栏下面：默写到第 10 段时目录和复习队列还在手边，不必滚回页首。
+     100vh 减去两条工具高度，面板自己滚动，不会把整页拉长。 */
+  position:sticky;top:calc(var(--topbar-h) + 12px);
+  max-height:calc(100vh - var(--topbar-h) - 24px);
+  overflow:auto;
+}
+.p3-col-title{font-size:14px;font-weight:700;margin:0 0 4px;color:var(--ink);letter-spacing:.5px}
+.p3-col-sub{font-size:12px;color:var(--muted);margin:0 0 12px}
+
+/* ---------- 目录条目：三种状态靠形状区分，不只靠颜色 ------------------- */
+.p3-toc-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.p3-toc-btn{
+  appearance:none;width:100%;display:flex;align-items:flex-start;gap:8px;
+  text-align:left;font-family:inherit;cursor:pointer;
+  border:1px solid transparent;border-radius:8px;background:transparent;
+  padding:7px 8px;font-size:13px;line-height:1.5;color:var(--ink-2);
+}
+.p3-toc-btn:hover{background:var(--green-050)}
+.p3-toc-btn:focus-visible{outline:2px solid var(--green-500);outline-offset:1px}
+.p3-toc-mark{
+  flex:0 0 auto;width:20px;height:20px;border-radius:999px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;background:#eef0ea;color:var(--ink-3)
+}
+/* JS 已把预览截到 16 字，这里再按栏宽截一次，窄栏不会把序号挤出可视区 */
+.p3-toc-txt{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p3-toc-btn.is-current{
+  background:var(--green-050);border-color:var(--green-200);color:var(--ink);font-weight:700
+}
+.p3-toc-btn.is-current .p3-toc-mark{background:var(--green-500);color:#fff}
+.p3-toc-btn.is-done .p3-toc-mark{background:var(--green-200);color:var(--green-900)}
+/* 未解锁的段落仍然可点：点了不跳转，只告诉他「这段还没写完」并把焦点送回第一个空，
+   真禁用（pointer-events:none）会变成「按钮坏了」。 */
+.p3-toc-btn.is-locked{color:var(--ink-3);cursor:not-allowed}
+.p3-toc-btn.is-locked .p3-toc-mark{background:#f0eee6;color:var(--ink-3)}
+.p3-toc-btn.is-locked:hover{background:transparent}
+
+/* ---------- 顶部工具条与遮罩：窄屏才有 ---------------------------------- */
+.p3-topbar{display:none}
+.p3-scrim{position:fixed;inset:0;z-index:85;background:rgba(15,61,51,.38)}
+/* 390px 拖回宽屏时抽屉的 is-open 还挂在节点上：宽栏里遮罩必须自证不存在，
+   否则一层看不见的黑纱盖住整页，点哪儿都没反应。 */
+@media (min-width:1000px){.p3-scrim{display:none}}
+
+#debugHostPractice{margin-bottom:14px}
+
+/* ---------- 窄屏（含 390×844）：单栏 + 两个抽屉 ------------------------- */
+@media (max-width:999px){
+  .wrap.is-wide{max-width:none;padding:0 14px 44px}
+  .p3-grid{grid-template-columns:minmax(0,1fr);gap:0}
+
+  .p3-topbar{
+    display:flex;align-items:center;gap:10px;
+    position:sticky;top:var(--topbar-h);z-index:45;
+    /* 实底而不是透明：默写内容会从这条底下滚过去，透上来就读不清了 */
+    background:var(--paper);border:1px solid var(--line);border-radius:var(--r-s);
+    padding:7px 8px;margin-bottom:12px
+  }
+  .p3-top-tip{font-size:13px;font-weight:600;color:var(--ink-2)}
+  .p3-topbar .btn{flex:0 0 auto}
+
+  .p3-toc,.p3-review{
+    /* 覆盖宽栏的 sticky：抽屉是视口级定位，跟着页面滚就走不出手边了。
+       遮罩 85 / 抽屉 90 都压在顶栏（40）之上：抽屉展开时先关它才能碰顶栏，
+       点纱或按 Escape 即关，焦点交回原来的按钮。 */
+    position:fixed;z-index:90;overflow:auto;
+    max-height:none;border-radius:0;border-color:var(--strong-line);
+    box-shadow:var(--shadow-l);
+    transition:transform .22s ease;
+    visibility:hidden          /* 收起时移出屏幕外，别让读屏和 Tab 撞上看不见的控件 */
+  }
+  .p3-toc.is-open,.p3-review.is-open{transform:none;visibility:visible}
+
+  .p3-toc{
+    top:0;left:0;bottom:0;width:min(84vw,320px);
+    padding:20px 16px 24px;
+    border-left:0;border-top:0;border-bottom:0;
+    transform:translateX(-100%)
+  }
+  .p3-review{
+    left:0;right:0;top:auto;bottom:0;
+    max-height:min(72vh,560px);
+    border-radius:16px 16px 0 0;border-left:0;border-right:0;border-bottom:0;
+    padding:16px 16px 18px;
+    transform:translateY(100%)
+  }
+  /* 全面屏手势条压住按钮是常见的坑；env 带 0px 兜底，不支持时上面的 padding 仍然生效 */
+  @supports (padding-bottom:env(safe-area-inset-bottom)){
+    .p3-review{padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
+  }
+
+  /* 调试时钟留在顶部（要求 6）：窄栏改左对齐，别把两个按钮推到看不见的右边 */
+  #debugHostPractice .wb-review-debug{justify-content:flex-start;margin-top:0;gap:8px}
+  #debugHostPractice .wb-clock-label{margin-right:0;flex:1 0 100%}
+}
+
+/* ---------- 中屏过渡：三栏仍保留，但两侧各让一档 ---------------------- */
+@media (min-width:1000px) and (max-width:1179px){
+  .p3-grid{grid-template-columns:184px minmax(0,1fr) 268px;gap:14px}
+  .p3-toc,.p3-review{padding:14px 12px}
 }

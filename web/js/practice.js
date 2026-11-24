@@ -13,6 +13,125 @@ let curSeg = null;        // 当前段落对象
 let activeBlank = null;   // 当前聚焦的空：提示与 Enter 都以它为锚点
 let advancing = false;    // 载入/闯关进行中：拦住连点与 Enter 抢跑
 
+/* ---------- 三栏壳：段落目录与窄屏抽屉 -------------------------------- */
+/**
+ * 目录只做「已解锁段落之间」的导航：跳到没写完的段等于绕开填空与闯关，
+ * 所以未完成的段落点了不跳，只提示并把焦点送回第一个待填的空。
+ */
+function renderToc() {
+  const box = $('pToc');
+  if (!box) return;
+  const segs = S.segments || [];
+  const done = segs.filter(s => s.done).length;
+  const sub = $('pTocSub');
+  if (sub) sub.textContent = '共 ' + segs.length + ' 段 · 已完成 ' + done;
+  const tip = $('p3TopTip');
+  if (tip) tip.textContent = '第 ' + (S.idx + 1) + ' / ' + segs.length + ' 段';
+
+  box.innerHTML = '';
+  segs.forEach((seg, i) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'p3-toc-btn' + (i === S.idx ? ' is-current' : '') + (seg.done ? ' is-done' : '') + (seg.done || i === S.idx ? '' : ' is-locked');
+    if (i === S.idx) btn.setAttribute('aria-current', 'step');
+    if (seg.done) btn.setAttribute('aria-label', '第 ' + (i + 1) + ' 段，已完成');
+
+    const mark = document.createElement('span');
+    mark.className = 'p3-toc-mark';
+    mark.textContent = seg.done ? '✓' : String(i + 1);
+
+    const txt = document.createElement('span');
+    txt.className = 'p3-toc-txt';
+    const chars = Array.from(seg.text || '');
+    txt.textContent = chars.length > 16 ? chars.slice(0, 16).join('') + '…' : chars.join('');
+
+    btn.appendChild(mark);
+    btn.appendChild(txt);
+    btn.onclick = () => jumpToSegment(i);
+    li.appendChild(btn);
+    box.appendChild(li);
+  });
+
+  const cur = box.querySelector('.is-current');
+  if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ block: 'nearest' }); } catch (e) { cur.scrollIntoView(); } }
+}
+
+/** 目录跳转：只允许去已完成的段落或当前段落 */
+async function jumpToSegment(i) {
+  const segs = S.segments || [];
+  if (uiBlocked() || i < 0 || i >= segs.length) return;
+  if (i === S.idx) { P3.close(); return; }
+  if (!segs[i].done) {
+    toast('第 ' + (i + 1) + ' 段还没写完，先把当前段的空填对再跳', 'warn');
+    const open = nextOpenBlank(null);
+    if (open) focusBlank(open, 'center');
+    return;
+  }
+  P3.close();
+  await loadSegment(i);
+}
+
+const P3 = {
+  last: 'toc',        // 最后一个被展开的抽屉：关掉时把焦点还给它的开关
+
+  init() {
+    const tocBtn = $('pTocToggle');
+    const revBtn = $('pReviewToggle');
+    const scrim = $('p3Scrim');
+    if (!tocBtn || !revBtn || !scrim) return;
+    tocBtn.onclick = () => this.toggle('toc');
+    revBtn.onclick = () => this.toggle('review');
+    scrim.onclick = () => this.close();
+  },
+
+  isOpen() {
+    const toc = $('pTocCol');
+    const rev = $('pReviewCol');
+    return !!(toc && toc.classList.contains('is-open')) || !!(rev && rev.classList.contains('is-open'));
+  },
+
+  toggle(which) {
+    const toc = $('pTocCol');
+    const rev = $('pReviewCol');
+    const scrim = $('p3Scrim');
+    if (!toc || !rev || !scrim) return;
+    const openToc = which === 'toc' ? !toc.classList.contains('is-open') : false;
+    const openRev = which === 'review' ? !rev.classList.contains('is-open') : false;
+    toc.classList.toggle('is-open', openToc);
+    rev.classList.toggle('is-open', openRev);
+    $('pTocToggle').setAttribute('aria-expanded', openToc ? 'true' : 'false');
+    $('pReviewToggle').setAttribute('aria-expanded', openRev ? 'true' : 'false');
+    scrim.hidden = !(openToc || openRev);
+    this.last = which;
+    // 抽屉展开后把焦点送进去，收起时还给触发按钮，键盘用户不会掉回页首
+    if (openToc) { const f = $('pToc').querySelector('button'); if (f) f.focus(); }
+    else if (openRev) { const card = $('wbReviewBody'); if (card) card.focus && card.focus(); }
+    else { (which === 'toc' ? $('pTocToggle') : $('pReviewToggle')).focus(); }
+  },
+
+  /** 两个出口（点纱、按 Esc）都走这里：抽屉是 visibility:hidden，焦点留在里面等于丢焦 */
+  close() {
+    const toc = $('pTocCol');
+    const rev = $('pReviewCol');
+    const scrim = $('p3Scrim');
+    if (!toc || !rev || !scrim) return;
+    const wasOpen = this.isOpen();
+    toc.classList.remove('is-open');
+    rev.classList.remove('is-open');
+    $('pTocToggle').setAttribute('aria-expanded', 'false');
+    $('pReviewToggle').setAttribute('aria-expanded', 'false');
+    scrim.hidden = true;
+    if (wasOpen) this.returnFocus();
+  },
+
+  /** 宽屏没有抽屉，开关按钮被 CSS 藏起来：offsetParent 为 null 时不送焦点，否则焦点进了看不见的控件 */
+  returnFocus() {
+    const b = this.last === 'review' ? $('pReviewToggle') : $('pTocToggle');
+    if (b && b.offsetParent) b.focus();
+  }
+};
+
 /* ---------- 空位的归一与判定 ------------------------------------------ */
 
 /**
@@ -105,6 +224,7 @@ function renderPassage() {
     : '<span class="muted">本段没有可挖空的实词，直接下一段</span>';
   updateHintCounter();
   updateStats();
+  renderToc();                       // 三栏左目录跟着当前段走，切段即高亮
   if ($('optSpeak').checked) speak(curSeg.text);
 }
 
@@ -270,6 +390,13 @@ async function advanceSegment() {
     updateSegTip();
     toast('还有 ' + open.length + ' 个空未写对：' + names + (open.length > 4 ? ' 等' : '') + '，已定位到第一个', 'warn');
     return;
+  }
+  curSeg.done = true;                 // 目录打勾的依据，也是「允许跳回来」的依据
+  renderToc();
+  // 阶段 3：本段所有空写对 = 该段的检查点各学完一次，马上排进复习计划；
+  // 写完顺手刷新右栏，累计排期数字当场跳。不 await 主流程：写库慢也不该把翻页卡住。
+  if (typeof Review !== 'undefined') {
+    Review.onSegmentDone(S.idx).then(n => { if (n && typeof Workbench !== 'undefined') Workbench.refreshReview(); });
   }
   if (S.idx === S.segments.length - 1) { finish(); return; }
 

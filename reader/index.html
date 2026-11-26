@@ -3,10 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
-  <meta name="theme-color" content="#f7f8fa">
+  <meta name="theme-color" content="#fbfaf6">
   <title>页间 Folio · 主动阅读</title>
   <meta name="description" content="页间 Folio：在真实文档中原位阅读、核对证据，并通过填空或理解题检查点。">
   <link rel="icon" type="image/svg+xml" href="/folio.svg">
+  <!-- 霞鹜文楷（SIL OFL 1.1，免费商用）：与主应用同款正文手写体，media=print 非阻塞加载 -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.min.css"
+        media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.min.css" /></noscript>
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body><a class="skip-link" href="#main">跳到正文</a><div id="root"></div><div id="notice" role="status" aria-live="polite"></div><script src="/shared.js"></script><script type="module" src="/src/main.ts"></script></body>

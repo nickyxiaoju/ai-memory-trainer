@@ -58,7 +58,7 @@ if (!html.includes(sharedTag) || !html.includes('src="/src/main.ts"') || !html.i
 // 静态版专属的返回入口：站点根是记忆练习，这里要能走回去。
 // 只用行内样式加 reader 自己的 CSS 变量，深色模式跟着 data-theme 走，不新增样式文件；
 // 不能用 .skip-link —— 它在 :not(:focus) 时是被 clip 隐藏的，画不出可见按钮。
-const backLink = '<a href="/" style="position:fixed;z-index:9;right:18px;bottom:18px;display:inline-flex;'
+const backLink = '<a href="/" class="static-back" style="position:fixed;z-index:9;right:18px;bottom:18px;display:inline-flex;'
   + 'align-items:center;padding:9px 14px;border-radius:999px;background:var(--surface);color:var(--ink);'
   + 'border:1px solid var(--strong-line);box-shadow:var(--shadow);text-decoration:none;font:13px/1.4 var(--ui)">返回记忆练习</a>';
 html = html

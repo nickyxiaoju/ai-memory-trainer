@@ -161,7 +161,7 @@ const AppConfig = {
 };
 
 /* ---------- B. 屏幕导航 / 配置持久化 ------------------------------------ */
-const SCREENS = ['screen-workbench', 'screen-legacy', 'screen-setup', 'screen-practice', 'screen-report', 'screen-auth', 'screen-profile'];
+const SCREENS = ['screen-workbench', 'screen-legacy', 'screen-setup', 'screen-practice', 'screen-report', 'screen-auth', 'screen-profile', 'screen-folio'];
 function go(name) {
   SCREENS.forEach(s => {
     const el = $(s);
@@ -174,7 +174,7 @@ function go(name) {
   });
   $$('.navtab').forEach(b => {
     // workbench 和 legacy 都映射到 workbench 导航按钮；setup/practice/report 映射到 practice（专项训练）
-    const group = ({ workbench: 'workbench', legacy: 'workbench', setup: 'practice', practice: 'practice', report: 'practice', profile: 'profile' })[name] || '';
+    const group = ({ workbench: 'workbench', legacy: 'workbench', setup: 'practice', practice: 'practice', report: 'practice', profile: 'profile', folio: 'folio' })[name] || '';
     b.classList.toggle('on', b.dataset.goto === group);
   });
   // 登录态胶囊在「登录/注册」屏打开时也进入选中态（深绿 + 白字），

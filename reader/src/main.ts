@@ -10,6 +10,15 @@ import { brand, icon, button, notify, two } from './ui.ts';
 
 const root = document.getElementById('root')!, compact = matchMedia('(max-width: 1039px)');
 const staticDemo = Boolean((window as Window & { FOLIO_STATIC?: boolean }).FOLIO_STATIC);
+// 嵌入主应用（/folio/index.html?embed=1）：主应用顶栏负责导航，这里不再画自己的顶栏，
+// 工作区高度也从「视口 − 自身顶栏」改成满高，因为 iframe 本身已被主应用裁到顶栏以下。
+const embed = new URLSearchParams(location.search).get('embed') === '1';
+if (embed) document.documentElement.classList.add('embed');
+// 视图滑动切换：视图按「资料库 → 阅读 → 章节总结」排深度，前进时新层从右滑入、
+// 旧层向左滑出，返回时反向。过渡期间旧的层还留在 DOM 里，所有绑定都等它移除后再做，
+// 因此下方各处的 document 级查询在绑定时刻必然只命中新层。
+let layer: HTMLElement | null = null, transitioning = false, lastView: 'reader' | 'library' | 'summary' = 'reader';
+const viewOrder: Record<'reader' | 'library' | 'summary', number> = { library: 0, reader: 1, summary: 2 };
 const docs: ReadingDoc[] = [demo], memory = new Map<string, Progress>(), drafts = new Map<string,string>(), blankDrafts = new Map<string,string[]>();
 let doc = demo, p = progress(doc), view: 'reader'|'library'|'summary' = 'reader';
 let mode: 'pdf'|'text' = 'pdf', zoom = 1, left = true, right = true, review = false;
@@ -26,7 +35,9 @@ const taskView = (fallbackInputs = false): TaskView => ({
   answerDraft: drafts.get(draftKey()) || '',
   blankDrafts: blankDrafts.get(draftKey()) || [],
 });
-const main = () => document.getElementById('main');
+// 滑动过渡期间新旧两个 #main 并存，取最后一个（新层后插到 DOM 尾部），
+// 旧层移除后只剩一个，语义不变。
+const main = () => { const all = document.querySelectorAll<HTMLElement>('#main'); return all.length ? all[all.length - 1] : null; };
 function modeFor(d:ReadingDoc) { return d.format === 'PDF' ? 'pdf' : 'text'; }
 function resetTask() { practice = false; route = 'blank'; fallback = false; feedback = ''; }
 let saveScroll: ReturnType<typeof setTimeout> | undefined;
@@ -45,19 +56,85 @@ function bindPosition() {
 }
 window.addEventListener('pagehide', () => { if (view==='reader' && main()) { p.position = {page:p.page,mode,offset:main()!.scrollTop}; save(); } });
 
-function AppShell(body: string) {
-  const reader = view === 'reader', dark = document.documentElement.dataset.theme === 'dark';
-  return `<header class="topbar"><button data-act="library" class="brand-button" aria-label="页间，返回资料库">${brand()}</button><div class="crumb"><i></i><button data-act="library">我的资料库</button>${view !== 'library' ? `${icon('next',12)}<span>${escapeHtml(doc.title)}</span>` : ''}</div><div class="top-tools">${reader ? `<span class="compact-title">${escapeHtml(doc.chapter)}</span><button class="mobile-menu" data-act="outline" aria-label="打开目录">${icon('toc')}</button>${button('find','find','查找已解锁正文')}<i></i><button class="desktop-toggle" data-act="outline" aria-label="切换目录" aria-pressed="${left}">${icon('toc')}</button><button class="desktop-toggle" data-act="study" aria-label="切换学习旁注" aria-pressed="${right}">${icon('panel')}</button><button class="mobile-menu" data-act="study" aria-label="打开学习旁注">${icon('panel')}</button>` : ''}${button('theme',dark?'sun':'moon',dark?'切换浅色':'切换深色')}</div></header>${body}<dialog id="tool-dialog" aria-labelledby="dialog-title"></dialog>`;
+/** 工具栏常驻在滑动层之外：切换动画不动它，只有阅读专属工具随视图淡入淡出。 */
+function mountChrome() {
+  const bar = document.createElement('header');
+  bar.className = 'topbar' + (embed ? ' topbar-embed' : '');
+  bar.id = 'app-bar';
+  bar.innerHTML =
+    `<button data-act="library" class="brand-button bar-standalone" aria-label="页间，返回资料库">${brand()}</button>` +
+    `<div class="crumb bar-standalone"><i></i><button data-act="library">我的资料库</button><span id="crumb-doc"></span></div>` +
+    `<button data-act="library" class="mini-link bar-lib">我的资料库</button>` +
+    `<div class="top-tools">` +
+    `<span class="compact-title reader-only" id="compact-title"></span>` +
+    `<button class="mobile-menu reader-only" data-act="outline" aria-label="打开目录">${icon('toc')}</button>` +
+    `<button type="button" class="icon-button reader-only" data-act="find" title="查找已解锁正文" aria-label="查找已解锁正文">${icon('find')}</button>` +
+    `<i class="reader-only"></i>` +
+    `<button class="desktop-toggle reader-only" data-act="outline" aria-label="切换目录" aria-pressed="true">${icon('toc')}</button>` +
+    `<button class="desktop-toggle reader-only" data-act="study" aria-label="切换学习旁注" aria-pressed="true">${icon('panel')}</button>` +
+    `<button class="mobile-menu reader-only" data-act="study" aria-label="打开学习旁注">${icon('panel')}</button>` +
+    `${button('theme','moon','切换深色')}` +
+    `</div>`;
+  root.append(bar);
+  const dialog = document.createElement('dialog');
+  dialog.id = 'tool-dialog'; dialog.setAttribute('aria-labelledby', 'dialog-title');
+  root.append(dialog);
+}
+/** 每次绘制同步工具栏：阅读工具的浮现/隐去、面包屑标题、目录/旁注按压态、深浅色图标。 */
+function syncChrome() {
+  const bar = document.getElementById('app-bar');
+  if (!bar) return;
+  bar.classList.toggle('without-reader', view !== 'reader');
+  const crumb = document.getElementById('crumb-doc');
+  if (crumb) crumb.innerHTML = view !== 'library' ? icon('next', 12) + '<span>' + escapeHtml(doc.title) + '</span>' : '';
+  const title = document.getElementById('compact-title');
+  if (title) title.textContent = view === 'reader' ? doc.chapter : '';
+  bar.querySelector<HTMLElement>('.desktop-toggle[data-act="outline"]')?.setAttribute('aria-pressed', String(left));
+  bar.querySelector<HTMLElement>('.desktop-toggle[data-act="study"]')?.setAttribute('aria-pressed', String(right));
+  const theme = bar.querySelector<HTMLElement>('[data-act="theme"]');
+  if (theme) {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    theme.innerHTML = icon(dark ? 'sun' : 'moon');
+    theme.setAttribute('aria-label', dark ? '切换浅色' : '切换深色');
+    theme.setAttribute('title', dark ? '切换浅色' : '切换深色');
+  }
 }
 function draw(preserve = false) {
+  if (!document.getElementById('app-bar')) mountChrome();
   const prevKey = activePageKey, old = main(); if (old && prevKey) lastScroll = old.scrollTop;
   const key = view === 'reader' ? draftKey() : view;
   if (pdfKey && pdfKey !== key && pdfObject) { URL.revokeObjectURL(pdfObject); pdfObject = ''; pdfKey = ''; }
   pdfRequest?.abort(); pdfRequest = undefined;
   const masked = practice && route === 'blank';
   const body = view === 'reader' ? `<div class="workspace ${left?'':'without-left'} ${right?'':'without-right'}"><aside class="left-rail" aria-label="阅读导航">${Outline(doc,p)}</aside><main id="main" class="reader-scroll" tabindex="-1">${DocumentViewer(doc,p,mode,zoom,review,taskView())}</main><aside class="right-rail" aria-label="学习旁注">${StudySidebar(doc,p,mode,masked)}</aside></div>` : view === 'library' ? DocumentLibrary(docs,progress,filter,query,staticDemo) : LearningSummary(doc,p);
-  root.innerHTML = AppShell(body); activePageKey = key;
+  syncChrome();
+  activePageKey = key;
   document.title = (view==='library'?'我的资料库':view==='summary'?'章节总结':doc.title) + ' · 页间 Folio';
+  const changed = view !== lastView, prevView = lastView;
+  lastView = view;
+  if (!layer) { layer = document.createElement('div'); layer.className = 'layer'; layer.innerHTML = body; root.append(layer); bindAll(preserve, prevKey); return; }
+  if (!changed || preserve) { layer.innerHTML = body; bindAll(preserve, prevKey); return; }
+  // 视图切换：双层滑动。前进（资料库→阅读→总结）新层从右入、旧层向左出；返回反向。
+  const fwd = viewOrder[view] > viewOrder[prevView];
+  const oldLayer = layer; transitioning = true;
+  const fresh = document.createElement('div');
+  fresh.className = 'layer enter ' + (fwd ? 'from-right' : 'from-left');
+  fresh.innerHTML = body;
+  root.append(fresh);
+  void fresh.offsetWidth;                       // 强制回流，让起始位移先生效再进入 settle
+  fresh.classList.add('settle');
+  oldLayer.classList.add('exit', fwd ? 'to-left' : 'to-right');
+  let finished = false;
+  const finish = () => {
+    if (finished) return; finished = true;
+    transitioning = false; oldLayer.remove(); layer = fresh;
+    bindAll(preserve, prevKey);
+  };
+  fresh.addEventListener('transitionend', e => { if (e.target === fresh && e.propertyName === 'transform') finish(); });
+  setTimeout(finish, 380);                      // transitionend 被吞时的兜底收场
+}
+/** 绑定必须等旧层移除后再做：过渡期间新旧两层并存，document 级查询会命中旧层。 */
+function bindAll(preserve: boolean, prevKey: string) {
   if (view === 'reader') {
     const task = doc.sections[p.page].checkpoint;
     if (task) bindCheckpoint(task, p.passed.includes(p.page), review, taskView(), {
@@ -76,7 +153,7 @@ function draw(preserve = false) {
     if (mode==='pdf' && doc.format==='PDF') void showPdf();
     bindPosition();
   } else if (view === 'library') bindLibrary();
-  if (preserve && prevKey===key && main()) main()!.scrollTop=lastScroll;
+  if (preserve && prevKey===activePageKey && main()) main()!.scrollTop=lastScroll;
 }
 async function showPdf() {
   const img = document.querySelector<HTMLImageElement>('#pdf-img'), status = document.getElementById('page-status');
@@ -233,7 +310,10 @@ function bindLibrary() {
   const el=root.querySelector<HTMLElement>('#import-state'); if(el&&importMessage){el.hidden=false;el.textContent=importMessage;}
 }
 root.addEventListener('click', e=>{
-  const b=(e.target as Element).closest<HTMLElement>('[data-act]'); if(!b)return; const act=b.dataset.act;
+  const b=(e.target as Element).closest<HTMLElement>('[data-act]'); if(!b)return;
+  // 滑动过渡期间旧层仍在 DOM 里且已带位移，忽略落在它上面的点击，避免「点了正在滑出的按钮」
+  if (transitioning && layer && layer.contains(b)) return;
+  const act=b.dataset.act;
   if(act==='close')return closeDialog();
   if(act==='theme'){const dark=document.documentElement.dataset.theme!=='dark'; document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('folio.theme',dark?'dark':'light');}catch{}draw(true);return;}
   if(act==='library'){closeDialog(false);view='library';review=false;draw();main()?.focus({preventScroll:true});return;}
@@ -290,8 +370,33 @@ document.addEventListener('keydown',e=>{if(view==='reader' && e.key==='/' && !e.
 window.visualViewport?.addEventListener('resize',()=>{const field=document.activeElement;if(!compact.matches || !(field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement))return;requestAnimationFrame(()=>{const v=window.visualViewport!,r=field.getBoundingClientRect();if(r.bottom>v.offsetTop+v.height-12 || r.top<v.offsetTop)field.scrollIntoView({block:'center'});});});
 compact.addEventListener('change',()=>{closeDialog(false);if(view==='reader'){zoom=1;draw(true);}});
 async function boot(){
+  // 静态演示页独立打开时并入主应用：主界面顶栏是唯一页头，这里只做转发，
+  // 否则用户会看到「只剩页间工具栏、没有主页头」的页面。
+  // dev 完整版（FOLIO_STATIC 未定义，跑在专用开发服务器上）保留独立运行；
+  // 主应用里的 iframe（embed=1）不转发，否则会把主应用套进自己。
+  if (staticDemo && !embed) { location.replace('/index.html?view=folio'); return; }
   try{docs.push(...await listImports());}catch{notify('浏览器资料库不可用，示例仍可阅读。');}
-  const restored=docs.find(d=>d.id===lastDoc()); if(restored){doc=restored;p=progress(doc);mode=doc.format==='PDF' ? (p.position?.mode ?? modeFor(doc)) : 'text';}
+  let restored = docs.find(d=>d.id===lastDoc());
+  // 主应用工作台的「页间资料」条目会先暂存待开文档再切屏：iframe 首次加载时
+  // postMessage 可能还没送达，这里按暂存键补开一次。
+  try {
+    const pending = localStorage.getItem('folio.pending-open');
+    const wanted = pending ? docs.find(d => d.id === pending) : null;
+    if (wanted) restored = wanted;
+    localStorage.removeItem('folio.pending-open');
+  } catch {}
+  if (restored) { doc=restored; p=progress(doc); mode=doc.format==='PDF' ? (p.position?.mode ?? modeFor(doc)) : 'text'; }
   save(); draw();
 }
 void boot();
+
+/** 主应用工作台点条目后经 postMessage 指定打开某份页间资料（同源校验） */
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin) return;
+  const data = (e.data || {}) as { type?: string; id?: string };
+  if (data && data.type === 'folio-open-doc' && typeof data.id === 'string') {
+    const d = docs.find(row => row.id === data.id);
+    if (d) openDoc(d.id);
+    try { localStorage.removeItem('folio.pending-open'); } catch {}
+  }
+});

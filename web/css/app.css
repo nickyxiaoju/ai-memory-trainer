@@ -142,6 +142,8 @@ a{color:var(--blue-700)}
 .spacer{flex:1}
 /* 顶栏主入口：开始学习 / 个人中心 */
 .mainnav{display:flex;gap:6px;align-items:center}
+/* 功能入口（工作台/页间阅读/专项训练）与设置入口（个人中心/本地模式）之间的分组分隔线 */
+.navsep{display:block;width:1px;height:20px;margin:0 6px;background:rgba(23,50,44,.18)}
 .navtab{
   font:inherit;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap;
   padding:7px 16px;border-radius:999px;border:1px solid var(--line);
@@ -168,10 +170,22 @@ a{color:var(--blue-700)}
   .logo>span:last-child{display:none}
   .navtab{padding:7px 12px;font-size:13px}
 }
+/* 手机宽度（≤479px）：四个页签 + 品牌标 + 状态胶囊必须单行塞下（375px 也要放得进）。
+   页签进一步收紧，胶囊只留状态圆点（文字在 title 与个人中心里都能看到）。 */
+@media (max-width:479px){
+  .topbar-in{padding:0 10px;gap:3px}
+  .navtab{padding:8px 6px;font-size:12px}
+  .navsep{margin:0 2px}
+  .authchip{width:44px;max-width:44px;padding:6px 10px;font-size:0;justify-content:center}
+  .authchip .dot{margin-right:0}
+}
 
 /* 屏幕切换 */
 .screen{display:none;animation:fade .35s ease}
 .screen.on{display:block}
+/* 页间阅读：满屏工作区，fixed 到顶栏以下；iframe 常驻（display 切换不重载） */
+#screen-folio{position:fixed;inset:var(--topbar-h) 0 0;z-index:1}
+#screen-folio iframe{width:100%;height:100%;border:0;display:block;background:var(--paper,#f6fbf9)}
 @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 

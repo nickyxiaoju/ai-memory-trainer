@@ -170,6 +170,15 @@ a{color:var(--blue-700)}
   .logo>span:last-child{display:none}
   .navtab{padding:7px 12px;font-size:13px}
 }
+/* 手机宽度（≤479px）：四个页签 + 品牌标 + 状态胶囊必须单行塞下（375px 也要放得进）。
+   页签进一步收紧，胶囊只留状态圆点（文字在 title 与个人中心里都能看到）。 */
+@media (max-width:479px){
+  .topbar-in{padding:0 10px;gap:3px}
+  .navtab{padding:8px 6px;font-size:12px}
+  .navsep{margin:0 2px}
+  .authchip{width:44px;max-width:44px;padding:6px 10px;font-size:0;justify-content:center}
+  .authchip .dot{margin-right:0}
+}
 
 /* 屏幕切换 */
 .screen{display:none;animation:fade .35s ease}

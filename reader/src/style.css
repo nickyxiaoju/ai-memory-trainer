@@ -16,7 +16,7 @@
 @keyframes appear{from{opacity:.15;transform:translateY(3px)}to{opacity:1;transform:none}}@keyframes inkpulse{from{outline:3px solid var(--gold)}to{outline:1px solid transparent}}
 @media(min-width:1600px){.workspace{grid-template-columns:246px minmax(0,1fr) 328px}.workspace.without-left{grid-template-columns:0 minmax(0,1fr) 328px}.workspace.without-right{grid-template-columns:246px minmax(0,1fr) 0}.workspace.without-left.without-right{grid-template-columns:0 minmax(0,1fr) 0}}
 @media(max-width:1150px) and (min-width:1040px){.workspace{grid-template-columns:220px minmax(0,1fr) 300px}.reader-in{padding-inline:18px}.right-rail{padding-inline:16px}.key-hint{display:none}}
-@media(max-width:1039px){.workspace,.workspace.without-left,.workspace.without-right,.workspace.without-left.without-right{display:block}.left-rail,.right-rail,.desktop-toggle{display:none}.reader-scroll{height:100%}.reader-in{max-width:790px;padding-inline:clamp(18px,4vw,32px)}.mobile-menu{display:inline-flex}.dialog.outline{margin:0 auto 0 0;width:min(300px,90vw);height:100dvh;max-height:100dvh;border-radius:0;border-left:0}.dialog.study{margin:auto auto 0;width:min(580px,100%);max-width:100%;border-radius:14px 14px 0 0;padding:0 18px max(10px,env(safe-area-inset-bottom));max-height:82dvh}.dialog.study>header{position:sticky;top:0;background:var(--surface);z-index:1;padding-inline:0}.dialog .rail-top{padding:9px 16px}.dialog .rail-foot{padding-top:10px}}
+@media(max-width:1039px){.workspace,.workspace.without-left,.workspace.without-right,.workspace.without-left.without-right{display:block}.left-rail,.right-rail,.desktop-toggle{display:none}.reader-scroll{height:100%}.reader-in{max-width:790px;padding-inline:clamp(18px,4vw,32px)}.mobile-menu{display:inline-flex}.dialog.outline,.dialog.study{width:min(430px,calc(100% - 24px));max-width:calc(100% - 24px);border-radius:16px;padding:0;max-height:80dvh}.dialog .rail-top{padding:9px 16px}.dialog .rail-foot{padding-top:10px}}
 @media(max-width:600px){.topbar{padding:0 12px;gap:8px}.top-tools{gap:0}.top-tools .icon-button,.mobile-menu{height:38px;width:34px}.top-tools>i{display:none}.crumb{display:none}.reader-in{padding:18px 13px max(42px,env(safe-area-inset-bottom))}.chapter-head h1{font-size:26px}.chapter-kicker{font-size:9px}.chapter-head p{font-size:12px;gap:6px}.reader-tools{gap:6px;margin:14px 0 8px}.flow-page{padding:19px 17px}.paper-header{margin-bottom:15px}.flow-page h2{font-size:1.35em;margin-top:5px}.flow-page p{line-height:1.85;margin:.6em 0}.checkpoint{padding:14px}.checkpoint h3{font-size:16px}.key-hint{display:none}.cp-actions{gap:18px}.editor{font-size:16px;min-height:76px}.retype-status{flex-wrap:wrap}.page-caption{font-size:10px;margin-bottom:12px}.dialog.find{margin:14vh auto auto}.compact-title{display:none}.target{font-size:18px}.icon-button:focus-visible{outline-offset:0}}
 .zoom-select{display:none}.figure-link{margin-top:5px}
 @media(max-width:600px){.top-tools .icon-button,.mobile-menu,.dialog>header .icon-button{width:44px;height:44px}.reader-tools{gap:7px}.mode-switch button{min-height:44px;min-width:44px}.page-nav .icon-button{width:44px;height:44px}.zoom{display:none}.zoom-select{display:block;height:44px;min-width:65px;padding:0 4px;font:12px var(--mono);color:var(--muted);border:0;background:transparent;cursor:pointer}.reader-tools .page-nav{gap:0}.dialog .source-ref,.dialog .task-link,.dialog .rail-search,.dialog .outline button,.dialog .rail-back{min-height:44px}.dialog.study .margin-section{padding:14px 0}.flow-page .paper-header,.page-caption>span:last-child{display:none}.cp-actions button,.unlock-row button,.chapter-end button{min-height:44px}.source-ref.figure-link{margin-top:0}.blank-wrap::after{content:'';position:absolute;inset:-9px}.blank-note{align-items:flex-start}.blank-progress{margin-left:0}.pdf-composer{width:min(92%,360px);min-width:0}.inline-composer{padding:11px}.flow-blank-field{font-size:1em}}
@@ -47,12 +47,5 @@ html:not(.embed) .bar-lib{display:none}
 /* 阅读专属工具（目录/查找/旁注）：随视图淡入淡出，与滑动动画并行，不跟页面一起滑 */
 .top-tools .reader-only{opacity:1;visibility:visible;transition:opacity .22s ease,visibility .22s}
 .topbar.without-reader .reader-only{opacity:0;visibility:hidden;pointer-events:none}
-/* 紧凑宽度下目录不再是盖住工具栏的整屏浮层，改成贴工具栏下方、随页面滚动的抽屉 */
-@media(max-width:1039px){
-  .dialog.outline{
-    position:absolute;top:54px;bottom:0;left:0;margin:0;
-    width:min(300px,90vw);height:auto;max-height:none;
-    border-radius:0 12px 0 0;border-top:0;border-left:0
-  }
-  html.embed .dialog.outline{top:46px}
-}
+/* 手机模式（≤1039px）下目录与学习旁注一律是居中弹窗（继承 .dialog 的居中样式），
+   电脑端的页内左右栏不受影响。 */

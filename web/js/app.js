@@ -601,6 +601,8 @@ const Workbench = {
     this.renderProgress();
     await this.loadDocs();
     this.renderDocs();
+    await this.loadFolioDocs();
+    this.renderFolioDocs();
     await this.refreshReview();
   },
 
@@ -635,6 +637,61 @@ const Workbench = {
     // 绑定点击事件
     box.querySelectorAll('.wb-doc-item').forEach(btn => {
       btn.onclick = () => this.openDoc(btn.dataset.docid);
+    });
+  },
+
+  /* ---------- 页间资料（Folio 阅读器导入的文档） ---------- */
+  // 主应用与 Folio 同源：直接读 Folio 的 IndexedDB（folio-documents/docs）与
+  // localStorage 进度（folio.v1.<id>）。只做展示与跳转，不写 Folio 的数据。
+  folioDocs: [],
+  async loadFolioDocs() {
+    try {
+      const db = await new Promise((resolve, reject) => {
+        const req = indexedDB.open('folio-documents', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('docs', { keyPath: 'id' });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      this.folioDocs = await new Promise((resolve, reject) => {
+        const tx = db.transaction('docs');
+        const r = tx.objectStore('docs').getAll();
+        tx.oncomplete = () => { db.close(); resolve(r.result || []); };
+        tx.onabort = () => { db.close(); reject(tx.error); };
+      });
+    } catch (e) {
+      this.folioDocs = [];
+    }
+  },
+  renderFolioDocs() {
+    const box = $('wbFolioList');
+    if (!box) return;
+    if (!this.folioDocs.length) {
+      box.innerHTML = '<p class="muted small" style="margin:12px 0">还没有导入的页间资料；在「页间阅读」里导入文档后会出现在这里。</p>';
+      return;
+    }
+    box.innerHTML = this.folioDocs.map(d => {
+      let passed = 0;
+      try {
+        const pr = JSON.parse(localStorage.getItem('folio.v1.' + d.id) || 'null');
+        if (pr && Array.isArray(pr.passed)) passed = pr.passed.length;
+      } catch (e) {}
+      const total = d.sections ? d.sections.length : 0;
+      return `<button type="button" class="wb-doc-item" data-folio="${escapeHtml(d.id)}">
+        <div class="wb-doc-title">${escapeHtml(d.title)}</div>
+        <div class="wb-doc-meta">${escapeHtml(d.format || '文档')} · 通过 ${passed} / ${total} 节 · 页间阅读</div>
+      </button>`;
+    }).join('');
+    box.querySelectorAll('.wb-doc-item').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.folio;
+        // 双保险：iframe 若已加载，postMessage 直接生效；若还在加载，boot 时读这个键补上
+        try { localStorage.setItem('folio.pending-open', id); } catch (e) {}
+        go('folio');
+        const frame = document.getElementById('folioFrame');
+        if (frame && frame.contentWindow) {
+          frame.contentWindow.postMessage({ type: 'folio-open-doc', id }, location.origin);
+        }
+      };
     });
   },
 
@@ -825,6 +882,7 @@ const Workbench = {
     // OCR 和 我的教材 暂时跳转到旧流程
     $('wbSrcOcr').onclick = () => { go('setup'); if (typeof InputTabs !== 'undefined') { const i = InputTabs.tabs.findIndex(t => t.id === 'tabOcr'); if (i > -1) InputTabs.select(i); } };
     $('wbSrcBook').onclick = () => { go('setup'); if (typeof InputTabs !== 'undefined') { const i = InputTabs.tabs.findIndex(t => t.id === 'tabBook'); if (i > -1) InputTabs.select(i); } };
+    $('wbSrcFolio').onclick = () => go('folio');
 
     // ESC 关闭浮层
     veil.addEventListener('keydown', (e) => {
@@ -881,10 +939,12 @@ const Workbench = {
 
 /* ---------- 事件绑定 -------------------------------------------------- */
 function bind() {
-  // 顶栏三个主入口 + 登录态胶囊
+  // 顶栏主入口 + 登录态胶囊
   $('navWorkbench').onclick = () => go('workbench');
+  $('navFolio').onclick = () => go('folio');
   $('navPractice').onclick = () => go('setup');
   $('navProfile').onclick = () => { go('profile'); Profile.refresh(); };
+  if ($('fsGoFolio')) $('fsGoFolio').onclick = () => go('folio');
   $('authChip').onclick = () => {
     if (S.account.signedIn) { go('profile'); Profile.refresh(); } else { go('auth'); App.renderAuthMode(); }
   };
@@ -1103,6 +1163,11 @@ function updateSplitInfo() {
   S.demoMode = $('demoMode').checked;
   bind();
   Book.init();
+  // 站外直链（如 /folio/index.html 转发来的 ?view=folio）直接落到对应屏幕，随后清掉参数
+  if (new URLSearchParams(location.search).get('view') === 'folio') {
+    go('folio');
+    history.replaceState({}, '', location.pathname);
+  }
   // 工作台是默认首页，不使用分屏吸附；旧产品介绍页（#screen-legacy）才用吸附
   document.documentElement.classList.remove('snap-legacy');
   Landing.init();

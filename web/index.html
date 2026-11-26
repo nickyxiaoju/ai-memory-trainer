@@ -25,7 +25,9 @@
     <span class="spacer"></span>
     <nav class="mainnav" aria-label="主入口">
       <button type="button" class="navtab" id="navWorkbench" data-goto="workbench">工作台</button>
+      <button type="button" class="navtab" id="navFolio" data-goto="folio">页间阅读</button>
       <button type="button" class="navtab" id="navPractice" data-goto="practice">专项训练</button>
+      <span class="navsep" aria-hidden="true"></span>
       <button type="button" class="navtab" id="navProfile" data-goto="profile">个人中心</button>
     </nav>
     <button type="button" class="authchip local" id="authChip" title="账号状态"><span class="dot"></span>本地模式</button>
@@ -69,12 +71,26 @@
             <p>已保存的学习内容</p>
           </div>
         </button>
+        <button type="button" class="wb-card" id="wbSrcFolio">
+          <div class="wb-card-icon">📄</div>
+          <div class="wb-card-body">
+            <h3>页间阅读</h3>
+            <p>在真实文档页上读、标、练</p>
+          </div>
+        </button>
       </div>
 
       <div class="wb-docs" id="wbDocsSection">
         <h3>我的教材</h3>
         <div class="wb-docs-list" id="wbDocsList">
           <p class="muted small" style="margin:12px 0">还没有教材，点击上方卡片开始添加。</p>
+        </div>
+      </div>
+
+      <div class="wb-docs" id="wbFolioSection">
+        <h3>页间资料</h3>
+        <div class="wb-docs-list" id="wbFolioList">
+          <p class="muted small" style="margin:12px 0">还没有导入的页间资料；在「页间阅读」里导入文档后会出现在这里。</p>
         </div>
       </div>
 
@@ -150,8 +166,14 @@
   <!-- 底部快捷入口 -->
   <div class="wb-footer">
     <button type="button" class="btn ghost sm" id="wbGoLegacy">查看产品介绍</button>
-    <a class="btn ghost sm" href="/folio/index.html">页间 Folio · 主动阅读工作台</a>
   </div>
+</section>
+
+<!-- ===================== 屏幕：页间阅读（嵌入 Folio 工作台） ===================== -->
+<!-- 放在 .wrap 之外并 fixed 到顶栏以下：Folio 是满屏三栏工作区，不能套 1000px 单列。
+     iframe 常驻文档流（display 切换），切走再切回不重载、阅读位置保留。 -->
+<section class="screen" id="screen-folio" aria-label="页间主动阅读">
+  <iframe id="folioFrame" src="/folio/index.html?embed=1" title="页间 Folio · 主动阅读工作台"></iframe>
 </section>
 
 <!-- ===================== 浮层：粘贴讲义内容（自定义模态弹窗） ===================== -->
@@ -246,7 +268,19 @@
     </div>
   </div>
 
-  <div class="fs fs-end" id="fs-end">
+  <div class="fs" id="fs-folio">
+    <div class="fs-in">
+      <p class="fs-kicker">阅读</p>
+      <h2>页间 Folio · 原位阅读</h2>
+      <p class="fs-claim">在真实文档的原页上读、标记证据，通过检查点再往下走。</p>
+      <p class="fs-desc">与默写互补的第二种练法：导入 PDF、DOCX、PPTX 或 TXT，原页高亮只画在能核对的锚点上，检查点兼顾「先说说理解」与原文填空，两条路径只解锁一次；答错可编辑，原页与重排两种视图随意切换。</p>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="fsGoFolio">进入页间阅读</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="fs alt fs-end" id="fs-end">
     <div class="fs-in">
       <p class="fs-kicker">补充</p>
       <h2>技术路线与为什么值得做</h2>
